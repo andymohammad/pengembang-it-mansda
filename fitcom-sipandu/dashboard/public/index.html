@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIPANDU Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.1/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @import url('https://rsms.me/inter/inter.css');
+        .status-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .status-online { background-color: #dcfce7; color: #166534; }
+        .status-offline { background-color: #fee2e2; color: #991b1b; }
+        .status-loading { background-color: #e0e7ff; color: #3730a3; }
+        .filter-tab.active { background-color: #e0e7ff; color: #3730a3; font-weight: 600; }
+        /* Indikator Warna */
+        .indicator-ideal { color: #16a34a; } /* green */
+        .indicator-warning { color: #f59e0b; } /* amber */
+        .indicator-danger { color: #dc2626; } /* red */
+        .reco-text { font-size: 0.875rem; color: #4b5563; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">SIPANDU Device</h1>
+                        <span id="device-status-badge" class="status-badge status-loading">LOADING...</span>
+                    </div>
+                    <div class="mt-1">
+                        <select id="device-selector" class="block w-full pl-3 pr-8 py-1 text-base border-gray-300 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm rounded-md"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column -->
+            <div class="lg:col-span-1 flex flex-col gap-6">
+                <!-- Controls -->
+                <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Kontrol Perangkat</h3>
+                    <div class="grid grid-cols-2 gap-6 items-center">
+                        <div>
+                            <label for="mode-toggle" class="block text-sm font-medium text-gray-700 mb-1">Mode</label>
+                            <button id="mode-toggle" class="relative inline-flex h-6 w-24 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 bg-gray-200" type="button" role="switch" aria-checked="false">
+                                <span class="absolute top-0 left-0 h-full w-1/2 flex items-center justify-center text-xs font-bold text-gray-600 transition-transform duration-200 ease-in-out" id="mode-label">MANUAL</span>
+                                <span class="inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" id="mode-switch-knob"></span>
+                            </button>
+                        </div>
+                        <div>
+                            <label for="motor-dc-toggle" class="block text-sm font-medium text-gray-700 mb-1">Motor DC</label>
+                            <button id="motor-dc-toggle" type="button" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2" role="switch" aria-checked="false">
+                                <span class="inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                            </button>
+                        </div>
+                        <div>
+                            <label for="dosing-pump-toggle" class="block text-sm font-medium text-gray-700 mb-1">Dosing Pump</label>
+                            <button id="dosing-pump-toggle" type="button" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2" role="switch" aria-checked="false">
+                                <span class="inline-block h-5 w-5 translate-x-0 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Setpoint Configuration Card -->
+                <div id="setpoint-card" class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Konfigurasi Mode Auto</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="moisture-setpoint" class="block text-sm font-medium text-gray-700">Minimum Kelembapan (%)</label>
+                            <input type="number" id="moisture-setpoint" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" placeholder="e.g., 45">
+                        </div>
+                        <div>
+                            <label for="ec-setpoint" class="block text-sm font-medium text-gray-700">Minimum EC (µS/cm)</label>
+                            <input type="number" id="ec-setpoint" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" placeholder="e.g., 250">
+                        </div>
+                    </div>
+                    <button id="save-setpoints-btn" class="mt-6 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Simpan Konfigurasi
+                    </button>
+                </div>
+                
+                <div class="mt-6 bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Log Peristiwa & Peringatan</h3>
+                    <div id="event-log-list" class="space-y-4 max-h-96 overflow-y-auto">
+                        <!-- Log items will be inserted here by JavaScript -->
+                        <p class="text-gray-500">Memuat log...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column - Chart -->
+            <div class="lg:col-span-2">
+                
+                <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Ringkasan & Rekomendasi</h3>
+                    <p class="text-sm text-gray-500 mb-4">Berdasarkan data <span id="analytics-range-label" class="font-bold">Realtime</span></p>
+                    
+                    <!-- pH Analytics -->
+                    <div class="mb-4">
+                        <p class="text-sm font-medium text-gray-700">PH Tanah</p>
+                        <p class="text-2xl font-bold text-gray-900" id="analytics-ph-avg">... <span class="text-sm font-normal text-gray-500">(rata-rata)</span></p>
+                        <p class="font-semibold" id="analytics-ph-indicator">Memuat...</p>
+                        <p class="reco-text" id="analytics-ph-reco">...</p>
+                    </div>
+                    
+                    <!-- Humidity Analytics -->
+                    <div class="mb-4">
+                        <p class="text-sm font-medium text-gray-700">Kelembapan Tanah</p>
+                        <p class="text-2xl font-bold text-gray-900" id="analytics-moisture-avg">... <span class="text-sm font-normal text-gray-500">(rata-rata)</span></p>
+                        <p class="font-semibold" id="analytics-moisture-indicator">Memuat...</p>
+                        <p class="reco-text" id="analytics-moisture-reco">...</p>
+                    </div>
+                    
+                    <!-- EC Analytics -->
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Nutrisi (EC)</p>
+                        <p class="text-2xl font-bold text-gray-900" id="analytics-ec-avg">... <span class="text-sm font-normal text-gray-500">(rata-rata)</span></p>
+                        <p class="font-semibold" id="analytics-ec-indicator">Memuat...</p>
+                        <p class="reco-text" id="analytics-ec-reco">...</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900 mb-2 sm:mb-0">Sensor History</h3>
+                        <div id="history-filter-tabs" class="flex space-x-1 bg-gray-100 p-1 rounded-lg border border-gray-200 w-full sm:w-auto overflow-x-auto">
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto active" data-range="realtime">Realtime</button>
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto" data-range="1d">1 Hari</button>
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto" data-range="7d">7 Hari</button>
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto" data-range="1m">1 Bulan</button>
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto" data-range="3m">3 Bulan</button>
+                            <button class="filter-tab px-3 py-1 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-200 w-full sm:w-auto" data-range="6m">6 Bulan</button>
+                        </div>
+                    </div>
+                    <div class="h-96">
+                        <canvas id="sensorHistoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <script>
+        let selectedDeviceId = ''; 
+        const API_BASE_URL = '';
+        let activeHistoryRange = 'realtime';
+        let activeHistoryLabel = 'Realtime';
+        // Element references
+        const phValueEl = document.getElementById('ph-value');
+        const ecValueEl = document.getElementById('ec-value');
+        const humidityValueEl = document.getElementById('humidity-value');
+        const deviceStatusBadgeEl = document.getElementById('device-status-badge');
+        const deviceSelectorEl = document.getElementById('device-selector');
+        const modeToggle = document.getElementById('mode-toggle');
+        const modeLabel = document.getElementById('mode-label');
+        const modeSwitchKnob = document.getElementById('mode-switch-knob');
+        const motorDcToggle = document.getElementById('motor-dc-toggle');
+        const dosingPumpToggle = document.getElementById('dosing-pump-toggle');
+        const historyFilterTabsEl = document.getElementById('history-filter-tabs');
+        // NEW: Setpoint elements
+        const setpointCardEl = document.getElementById('setpoint-card');
+        const moistureSetpointEl = document.getElementById('moisture-setpoint');
+        const ecSetpointEl = document.getElementById('ec-setpoint');
+        const saveSetpointsBtn = document.getElementById('save-setpoints-btn');
+        const analyticsRangeLabelEl = document.getElementById('analytics-range-label');
+        const analyticsPhAvgEl = document.getElementById('analytics-ph-avg');
+        const analyticsPhIndicatorEl = document.getElementById('analytics-ph-indicator');
+        const analyticsPhRecoEl = document.getElementById('analytics-ph-reco');
+        const analyticsMoistureAvgEl = document.getElementById('analytics-moisture-avg');
+        const analyticsMoistureIndicatorEl = document.getElementById('analytics-moisture-indicator');
+        const analyticsMoistureRecoEl = document.getElementById('analytics-moisture-reco');
+        const analyticsEcAvgEl = document.getElementById('analytics-ec-avg');
+        const analyticsEcIndicatorEl = document.getElementById('analytics-ec-indicator');
+        const analyticsEcRecoEl = document.getElementById('analytics-ec-reco');
+        const eventLogListEl = document.getElementById('event-log-list');
+        
+        let sensorChart;
+        let isUpdating = false;
+        let dataFetchInterval;
+        // --- SVG Icons for Logs ---
+        const ICONS = {
+            INFO: `<svg class="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>`,
+            WARN: `<svg class="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM10 13a1 1 0 100-2 1 1 0 000 2zm-1-8a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>`,
+            DANGER: `<svg class="h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`
+        };
+        // --- Chart Initialization ---
+        function initializeChart() {
+            const ctx = document.getElementById('sensorHistoryChart').getContext('2d');
+            sensorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                    { label: 'pH', data: [], borderColor: 'rgb(234, 179, 8)', yAxisID: 'y' },
+                    { label: 'EC (µS/cm)', data: [], borderColor: 'rgb(59, 130, 246)', yAxisID: 'y1' },
+                    { label: 'Humidity (%)', data: [], borderColor: 'rgb(34, 197, 94)', yAxisID: 'y' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'time', time: { unit: 'minute', tooltipFormat: 'PPpp' }, title: { display: true, text: 'Time' }},
+                        y: { type: 'linear', position: 'left', title: { display: true, text: 'pH / Humidity (%)' }},
+                        y1: { type: 'linear', position: 'right', title: { display: true, text: 'EC (µS/cm)' }, grid: { drawOnChartArea: false }}
+                    }
+                }
+            });
+        }
+        
+        // --- UI Update Functions ---
+        function updateToggle(element, isActive) {
+            element.setAttribute('aria-checked', isActive);
+            if (isActive) {
+                element.classList.replace('bg-gray-200', 'bg-green-600');
+                element.firstElementChild.classList.add('translate-x-full');
+            } else {
+                element.classList.replace('bg-green-600', 'bg-gray-200');
+                element.firstElementChild.classList.remove('translate-x-full');
+            }
+        }
+        
+        function updateModeToggle(mode) {
+            const isAuto = mode === 'AUTO';
+            modeToggle.setAttribute('aria-checked', isAuto);
+            modeLabel.textContent = isAuto ? 'AUTO' : 'MANUAL';
+            setpointCardEl.style.display = isAuto ? 'block' : 'none'; // Show/hide setpoint card based on mode
+            if (isAuto) {
+                modeToggle.classList.replace('bg-gray-200', 'bg-green-600');
+                modeSwitchKnob.classList.add('translate-x-full');
+                modeLabel.classList.remove('left-0'); modeLabel.classList.add('right-0');
+            } else {
+                modeToggle.classList.replace('bg-green-600', 'bg-gray-200');
+                modeSwitchKnob.classList.remove('translate-x-full');
+                modeLabel.classList.add('left-0'); modeLabel.classList.remove('right-0');
+            }
+        }
+        
+        function updateAnalyticsCard(analytics) {
+            // Fallback for no data
+            if (!analytics || analytics.avg_ph === null) {
+                analyticsPhAvgEl.innerHTML = `- <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+                analyticsPhIndicatorEl.textContent = 'Data tidak cukup';
+                analyticsPhIndicatorEl.className = 'font-semibold';
+                analyticsPhRecoEl.textContent = 'Data tidak cukup untuk dianalisis.';
+                // (Repeat for moisture and EC)
+                analyticsMoistureAvgEl.innerHTML = `- <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+                analyticsMoistureIndicatorEl.textContent = 'Data tidak cukup';
+                analyticsMoistureIndicatorEl.className = 'font-semibold';
+                analyticsMoistureRecoEl.textContent = 'Data tidak cukup untuk dianalisis.';
+                analyticsEcAvgEl.innerHTML = `- <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+                analyticsEcIndicatorEl.textContent = 'Data tidak cukup';
+                analyticsEcIndicatorEl.className = 'font-semibold';
+                analyticsEcRecoEl.textContent = 'Data tidak cukup untuk dianalisis.';
+                return;
+            }
+            
+            // --- pH Logic ---
+            const avg_ph = parseFloat(analytics.avg_ph);
+            analyticsPhAvgEl.innerHTML = `${avg_ph.toFixed(1)} <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+            if (avg_ph < 5.8) {
+                analyticsPhIndicatorEl.textContent = 'Terlalu Asam';
+                analyticsPhIndicatorEl.className = 'font-semibold indicator-danger';
+                analyticsPhRecoEl.textContent = 'REKOMENDASI: Tanaman sulit menyerap nutrisi. Pertimbangkan pemberian kapur dolomit untuk menaikkan pH.';
+            } else if (avg_ph > 7.5) {
+                analyticsPhIndicatorEl.textContent = 'Terlalu Basa';
+                analyticsPhIndicatorEl.className = 'font-semibold indicator-danger';
+                analyticsPhRecoEl.textContent = 'REKOMENDASI: Beberapa nutrisi (spt zat besi) terikat. Periksa sumber air, pertimbangkan penggunaan penurun pH.';
+            } else {
+                analyticsPhIndicatorEl.textContent = 'Ideal';
+                analyticsPhIndicatorEl.className = 'font-semibold indicator-ideal';
+                analyticsPhRecoEl.textContent = 'REKOMENDASI: Kondisi optimal untuk penyerapan nutrisi. Jaga tetap stabil.';
+            }
+            
+            // --- Moisture Logic ---
+            const avg_moisture = parseFloat(analytics.avg_moisture);
+            analyticsMoistureAvgEl.innerHTML = `${avg_moisture.toFixed(1)}% <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+            if (avg_moisture < 40) {
+                analyticsMoistureIndicatorEl.textContent = 'Terlalu Kering';
+                analyticsMoistureIndicatorEl.className = 'font-semibold indicator-warning';
+                analyticsMoistureRecoEl.textContent = 'REKOMENDASI: Tanaman berpotensi stres. Mode AUTO akan menyiram. Pastikan setpoint kelembapan Anda sudah sesuai.';
+            } else if (avg_moisture > 75) {
+                analyticsMoistureIndicatorEl.textContent = 'Terlalu Lembap';
+                analyticsMoistureIndicatorEl.className = 'font-semibold indicator-warning';
+                analyticsMoistureRecoEl.textContent = 'REKOMENDASI: Waspada jamur dan busuk akar. Pastikan drainase lahan Anda baik.';
+            } else {
+                analyticsMoistureIndicatorEl.textContent = 'Cukup';
+                analyticsMoistureIndicatorEl.className = 'font-semibold indicator-ideal';
+                analyticsMoistureRecoEl.textContent = 'REKOMENDASI: Kondisi kelembapan terjaga. Sistem bekerja dengan baik.';
+            }
+            
+            // --- EC Logic ---
+            const avg_ec = parseFloat(analytics.avg_ec);
+            analyticsEcAvgEl.innerHTML = `${avg_ec.toFixed(0)} µS/cm <span class="text-sm font-normal text-gray-500">(rata-rata)</span>`;
+            if (avg_ec < 200) {
+                analyticsEcIndicatorEl.textContent = 'Nutrisi Rendah';
+                analyticsEcIndicatorEl.className = 'font-semibold indicator-warning';
+                analyticsEcRecoEl.textContent = 'REKOMENDASI: Tanaman mungkin kekurangan nutrisi. Mode AUTO akan memompa pupuk. Pastikan setpoint EC Anda sudah sesuai.';
+            } else if (avg_ec > 500) { // Angka ini mungkin perlu disesuaikan
+                analyticsEcIndicatorEl.textContent = 'Nutrisi Terlalu Tinggi';
+                analyticsEcIndicatorEl.className = 'font-semibold indicator-danger';
+                analyticsEcRecoEl.textContent = 'REKOMENDASI: Resiko tanaman "terbakar". Hentikan pemupukan manual. Pertimbangkan pembilasan media tanam.';
+            } else {
+                analyticsEcIndicatorEl.textContent = 'Subur';
+                analyticsEcIndicatorEl.className = 'font-semibold indicator-ideal';
+                analyticsEcRecoEl.textContent = 'REKOMENDASI: Kandungan nutrisi cukup untuk tanaman. Sistem bekerja dengan baik.';
+            }
+            
+            // Update analytics card title
+            analyticsRangeLabelEl.textContent = activeHistoryLabel;
+        }
+        
+        
+        // UPDATED: This function no longer updates the main sensor cards
+        function updateUI(data) {
+            isUpdating = true;
+            deviceStatusBadgeEl.textContent = data.status;
+            deviceStatusBadgeEl.className = `status-badge status-${data.status.toLowerCase()}`;
+            
+            // This section is removed as it's now handled by the analytics card
+            // if (data.telemetry) { ... } 
+            
+            if(data.device) {
+                updateModeToggle(data.device.mode);
+                updateToggle(motorDcToggle, data.device.water_pump_status === 'ON');
+                updateToggle(dosingPumpToggle, data.device.nutrient_pump_status === 'ON');
+                moistureSetpointEl.value = data.device.moisture_min || '';
+                ecSetpointEl.value = data.device.ec_min || '';
+            }
+            setTimeout(() => { isUpdating = false; }, 500);
+        }
+        
+        // --- NEW: Function to update the event log UI ---
+        function updateEventLogUI(logs) {
+            eventLogListEl.innerHTML = ''; // Hapus log lama
+            if (!logs || logs.length === 0) {
+                eventLogListEl.innerHTML = '<p class="text-gray-500">Tidak ada peristiwa untuk ditampilkan.</p>';
+                return;
+            }
+            
+            logs.forEach(log => {
+                const logItem = document.createElement('div');
+                const logDate = new Date(log.createdAt).toLocaleString('id-ID', {
+                    dateStyle: 'short',
+                    timeStyle: 'medium'
+                });
+                
+                logItem.className = `flex items-start p-3 border-l-4 ${'log-' + log.type}`;
+                logItem.innerHTML = `
+                <div class="flex-shrink-0">
+                    ${ICONS[log.type] || ICONS['INFO']}
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-800">${log.message}</p>
+                    <p class="text-xs text-gray-500">${logDate}</p>
+                </div>
+            `;
+                eventLogListEl.appendChild(logItem);
+            });
+        }
+        // --- API Call Functions ---
+        async function fetchData() {
+            if (!selectedDeviceId) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/devices/${selectedDeviceId}/latest`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                updateUI(data); // updateUI now only updates controls and status
+            } catch (error) {
+                console.error("Error fetching latest data:", error);
+                deviceStatusBadgeEl.textContent = 'ERROR';
+                deviceStatusBadgeEl.className = 'status-badge status-offline';
+            }
+        }
+        
+        // UPDATED: Now receives an object { history, analytics }
+        async function fetchHistoryData(range) {
+            if (!selectedDeviceId) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/devices/${selectedDeviceId}/telemetry?range=${range}`);
+                if (!response.ok) throw new Error('Failed to fetch history');
+                const responseData = await response.json(); // Get the combined object
+                
+                // 1. Update Chart with History
+                sensorChart.data.datasets.forEach(dataset => dataset.data = []);
+                responseData.history.forEach(d => {
+                    const time = new Date(d.timestamp);
+                    sensorChart.data.datasets[0].data.push({x: time, y: d.ph});
+                    sensorChart.data.datasets[1].data.push({x: time, y: d.ec});
+                    sensorChart.data.datasets[2].data.push({x: time, y: d.moisture});
+                });
+                let timeUnit = 'minute';
+                if (['7d', '1m', '3m', '6m'].includes(range)) timeUnit = 'day';
+                else if (range === '1d') timeUnit = 'hour';
+                sensorChart.options.scales.x.time.unit = timeUnit;
+                sensorChart.update();
+                
+                // 2. Update Analytics Card
+                updateAnalyticsCard(responseData.analytics);
+                
+            } catch (error) {
+                console.error("Error fetching history data:", error);
+                // Reset analytics card on error
+                updateAnalyticsCard(null);
+            }
+        }
+        
+        async function fetchEventLog() {
+            if (!selectedDeviceId) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/devices/${selectedDeviceId}/notifications`);
+                if (!response.ok) throw new Error('Failed to fetch logs');
+                const logs = await response.json();
+                updateEventLogUI(logs);
+            } catch (error) {
+                console.error("Error fetching event logs:", error);
+                eventLogListEl.innerHTML = '<p class="text-red-500">Gagal memuat log peristiwa.</p>';
+            }
+        }
+        
+        
+        async function sendControlStateUpdate() {
+            if (isUpdating || !selectedDeviceId) return;
+            const newMode = modeToggle.getAttribute('aria-checked') === 'true' ? 'AUTO' : 'MANUAL';
+            const newWaterPumpStatus = motorDcToggle.getAttribute('aria-checked') === 'true';
+            const newNutrientPumpStatus = dosingPumpToggle.getAttribute('aria-checked') === 'true';
+            const payload = { mode: newMode, water_pump_status: newWaterPumpStatus, nutrient_pump_status: newNutrientPumpStatus };
+            try {
+                await fetch(`${API_BASE_URL}/api/devices/${selectedDeviceId}/control-state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                await fetchData(); 
+            } catch (error) {
+                console.error(`Error sending control state:`, error);
+            }
+        }
+        
+        // NEW: Function to save setpoints
+        async function saveSetpoints() {
+            if (!selectedDeviceId) return;
+            const payload = {
+                mode: 'AUTO', // Saving setpoints implies staying in AUTO mode
+                setpoints: {
+                    moisture_min: parseFloat(moistureSetpointEl.value) || null,
+                    ec_min: parseFloat(ecSetpointEl.value) || null
+                }
+            };
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/devices/${selectedDeviceId}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if(!response.ok) throw new Error('Failed to save setpoints');
+                alert('Konfigurasi berhasil disimpan!');
+                await fetchData();
+            } catch(error) {
+                console.error('Error saving setpoints:', error);
+                alert('Gagal menyimpan konfigurasi.');
+            }
+        }
+        
+        async function initializeDashboard() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/devices`);
+                if (!response.ok) throw new Error('Could not fetch devices');
+                const devices = await response.json();
+                deviceSelectorEl.innerHTML = '';
+                if (devices.length > 0) {
+                    devices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.textContent = device.deviceId;
+                        deviceSelectorEl.appendChild(option);
+                    });
+                    selectedDeviceId = devices[0].deviceId;
+                    loadDataForSelectedDevice();
+                } else {
+                    deviceStatusBadgeEl.textContent = 'NO DEVICES';
+                    deviceStatusBadgeEl.className = 'status-badge status-offline';
+                }
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                deviceStatusBadgeEl.textContent = 'INIT ERROR';
+                deviceStatusBadgeEl.className = 'status-badge status-offline';
+            }
+        }
+        
+        function loadDataForSelectedDevice() {
+            if (dataFetchInterval) clearInterval(dataFetchInterval);
+            
+            fetchData();
+            fetchHistoryData(activeHistoryRange);
+            fetchEventLog(); // Muat log peristiwa saat perangkat dipilih
+            
+            if (activeHistoryRange === 'realtime') {
+                dataFetchInterval = setInterval(() => {
+                    if (document.activeElement === moistureSetpointEl || document.activeElement === ecSetpointEl) {
+                        console.log('User is typing, skipping refresh.');
+                        return;
+                    }
+                    console.log('Refreshing realtime data...');
+                    fetchData();
+                    fetchHistoryData(activeHistoryRange);
+                    fetchEventLog(); // Muat ulang log secara berkala
+                }, 5000);
+            }
+        }
+        
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeChart();
+            initializeDashboard();
+            
+            deviceSelectorEl.addEventListener('change', (event) => {
+                selectedDeviceId = event.target.value;
+                loadDataForSelectedDevice();
+            });
+            
+            historyFilterTabsEl.addEventListener('click', (event) => {
+                if (event.target.classList.contains('filter-tab')) {
+                    document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+                    event.target.classList.add('active');
+                    activeHistoryRange = event.target.dataset.range;
+                    // UPDATED: Call the main data loader to reset interval logic
+                    loadDataForSelectedDevice();
+                }
+            });
+            
+            saveSetpointsBtn.addEventListener('click', saveSetpoints);
+            
+            modeToggle.addEventListener('click', () => {
+                const isCurrentlyAuto = modeToggle.getAttribute('aria-checked') === 'true';
+                updateModeToggle(isCurrentlyAuto ? 'MANUAL' : 'AUTO');
+                sendControlStateUpdate();
+            });
+            motorDcToggle.addEventListener('click', () => {
+                const isCurrentlyOn = motorDcToggle.getAttribute('aria-checked') === 'true';
+                updateToggle(motorDcToggle, !isCurrentlyOn);
+                sendControlStateUpdate();
+            });
+            dosingPumpToggle.addEventListener('click', () => {
+                const isCurrentlyOn = dosingPumpToggle.getAttribute('aria-checked') === 'true';
+                updateToggle(dosingPumpToggle, !isCurrentlyOn);
+                sendControlStateUpdate();
+            });
+        });
+    </script>
+    
+</body>
+</html>
+
