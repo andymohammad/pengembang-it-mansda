@@ -1,9 +1,6 @@
-// database.js
 require('dotenv').config();
 const mysql = require('mysql2');
 
-// 1. Buat Connection Pool
-// Pool akan mengelola beberapa koneksi sekaligus
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -14,9 +11,7 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// 2. Fungsi untuk inisialisasi database (membuat tabel)
 const initializeDatabase = () => {
-    // Dapatkan satu koneksi dari pool
     pool.getConnection((err, connection) => {
         if (err) {
             console.error('Error connecting to MySQL database:', err);
@@ -76,9 +71,5 @@ const initializeDatabase = () => {
         });
     });
 };
-// 3. Panggil fungsi inisialisasi saat aplikasi dimulai
 initializeDatabase();
-
-// 4. Ekspor pool yang sudah di-promise-kan
-// Ini memungkinkan kita menggunakan async/await di server.js
 module.exports = pool.promise();
