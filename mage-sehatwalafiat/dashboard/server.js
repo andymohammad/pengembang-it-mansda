@@ -15,7 +15,6 @@ dayjs.extend(timezone);
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 // Middleware
 app.use(express.json()); // Untuk parsing body JSON
 app.use(express.static('public')); // Melayani file statis (CSS, JS Klien)
@@ -61,9 +60,6 @@ client.on('message', async (topic, payload) => {
     console.error('Failed to parse MQTT message (not JSON)', error);
     return;
   }
-  
-  // --- LOGIKA BARU UNTUK BATCH (Array) ATAU TUNGGAL (Objek) ---
-  
   let dataPoints = [];
   
   if (Array.isArray(data)) {
@@ -94,31 +90,42 @@ client.on('message', async (topic, payload) => {
       console.warn(`[MQTT FAILED] Invalid token in data point: ${auth_token}`);
       continue; // Lanjutkan ke data point berikutnya dalam batch
     }
+    const currentUserId = device.user_id;
     const deviceRoom = `device_${device.id}`;
     // Perangkat valid, lanjutkan
     if (topic === DATA_TOPIC) {
       console.log(`[MQTT SUCCESS] Processing data for device: '${device.device_name}'`);
-      
+      if (heart_rate == null || heart_rate === 0 || spo2 == null || spo2 === 0) {
+        
+        console.log(`[MQTT INFO] Invalid data (HR/SpO2=0) for device: '${device.device_name}'. Not saving.`);
+        io.to(deviceRoom).emit('invalid-data-toast', {
+          device_name: device.device_name,
+          status_message: status || "Data tidak valid (HR/SpO2 = 0)"
+        });
+        // Lewati sisa loop, jangan simpan ke DB
+        continue;
+      }
       try {
         // Simpan data point ini ke DB
-        await saveToDatabase(device.id, heart_rate, spo2, status, hrv, sqi, timestamp);
+        await saveToDatabase(device.id,currentUserId, heart_rate, spo2, status, hrv, sqi, timestamp);
         console.log(`[DB SUCCESS] Log data saved for device: ${device.device_name}`);
       } catch (dbError) {
         console.error(`[DB FAILED] Failed to save log for device: ${device.device_name}`, dbError.message);
-        continue; // Lanjutkan ke data point berikutnya
+        continue; 
       }
       
-      
-      io.to(deviceRoom).emit('update-data', {
-        device_id: device.id,
-        device_name: device.device_name,
-        heart_rate,
-        spo2,
-        status,
-        hrv,
-        sqi
-      });
-      
+      if (currentUserId) {
+        io.to(deviceRoom).emit('update-data', {
+          device_id: device.id,
+          user_id: currentUserId,
+          device_name: device.device_name,
+          heart_rate,
+          spo2,
+          status,
+          hrv,
+          sqi
+        });
+      }
     } else if (topic === STATUS_TOPIC) {
       // Proses pembaruan status
       console.log(`[MQTT SUCCESS] Processing status for device: '${device.device_name}'`);
@@ -133,7 +140,7 @@ client.on('message', async (topic, payload) => {
 });
 
 
-// --- RUTE HTTP ---
+// --- HTTP ROUTE ---
 
 
 app.get('/', async (req, res) => {
@@ -147,70 +154,171 @@ app.get('/', async (req, res) => {
     res.status(500).send("Gagal memuat daftar perangkat");
   }
 });
-app.get('/dashboard', async (req, res) => {
-  // 1. Ambil device_id dari query URL
-  const { device_id } = req.query;
+// app.get('/dashboard', async (req, res) => {
+//   // 1. Ambil device_id dari query URL
+//   const { device_id } = req.query;
   
-  // 2. Jika tidak ada ID, paksa kembali ke halaman pemilihan
-  if (!device_id) {
-    return res.redirect('/');
-  }
+//   // 2. Jika tidak ada ID, paksa kembali ke halaman pemilihan
+//   if (!device_id) {
+//     return res.redirect('/');
+//   }
   
-  let logs = [];
-  let device = null;
-  let user = null;
-  let allConditions = [];
-  let userConditions = [];
-  let isProfileIncomplete = true; 
+//   let logs = [];
+//   let device = null;
+//   let user = null;
+//   let allConditions = [];
+//   let userConditions = [];
+//   let isProfileIncomplete = true; 
+  
+//   try {
+//     const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [device_id]);
+//     if (deviceRows.length === 0) {
+//       return res.redirect('/'); // Perangkat tidak ditemukan
+//     }
+//     device = deviceRows[0];
+//     [allConditions] = await db.query("SELECT * FROM conditions ORDER BY condition_name");
+//     if (device.user_id) {
+//       // 4. Ambil profil pengguna
+//       const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [device.user_id]);
+//       if (userRows.length > 0) {
+//         user = userRows[0];
+        
+//         // 5. Cek kelengkapan profil
+//         // (Kita anggap profil lengkap jika Tgl Lahir DAN Tinggi/Berat diisi)
+//         if (user.date_of_birth && user.height_cm && user.weight_kg) {
+//           isProfileIncomplete = false;
+//         }
+        
+//         // 6. Ambil kondisi yang sudah dimiliki pengguna
+//         const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [user.id]);
+//         userConditions = userCondRows.map(row => row.condition_id);
+//       }
+//     }
+//     // Ambil log HANYA untuk perangkat ini
+//     const logQuery = `
+//       SELECT s.id, s.device_id, s.heart_rate, s.spo2, s.status, s.hrv, s.sqi, s.timestamp, d.device_name 
+//       FROM sensor_logs s
+//       LEFT JOIN devices d ON s.device_id = d.id
+//       WHERE s.device_id = ? 
+//       ORDER BY s.timestamp DESC 
+//       LIMIT 100
+//     `;
+//     const [logRows] = await db.query(logQuery, [device_id]);
+//     logs = logRows.reverse();
+    
+//   } catch (err) {
+//     console.error("Database query error in GET /dashboard:", err.message);
+//     // Tetap render halaman meski log gagal, tapi kirim log kosong
+//   }
+//   console.log(logs);
+//   // 5. Render halaman dashboard, sekarang dengan data 'device' dan 'logs'
+//   res.render('dashboard', { logs: logs, device: device,
+//     user: user, 
+//     allConditions: allConditions, 
+//     userConditions: userConditions, 
+//     isProfileIncomplete: isProfileIncomplete
+//   });
+// });
+
+app.get('/dashboard/:id', async (req, res) => {
+  const deviceId = req.params.id;
   
   try {
-    const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [device_id]);
+    // 1. Ambil data perangkat
+    const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [deviceId]);
     if (deviceRows.length === 0) {
-      return res.redirect('/'); // Perangkat tidak ditemukan
+      return res.status(404).send('Perangkat tidak ditemukan');
     }
-    device = deviceRows[0];
-    [allConditions] = await db.query("SELECT * FROM conditions ORDER BY condition_name");
-    if (device.user_id) {
-      // 4. Ambil profil pengguna
-      const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [device.user_id]);
-      if (userRows.length > 0) {
-        user = userRows[0];
-        
-        // 5. Cek kelengkapan profil
-        // (Kita anggap profil lengkap jika Tgl Lahir DAN Tinggi/Berat diisi)
-        if (user.date_of_birth && user.height_cm && user.weight_kg) {
-          isProfileIncomplete = false;
-        }
-        
-        // 6. Ambil kondisi yang sudah dimiliki pengguna
-        const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [user.id]);
-        userConditions = userCondRows.map(row => row.condition_id);
-      }
+    const device = deviceRows[0];
+
+    // [CEK PENTING]
+    // Jika tidak ada user_id (misal: user akses URL langsung), paksa kembali!
+    if (!device.user_id) {
+      return res.redirect(`/link-device/${deviceId}`);
     }
-    // Ambil log HANYA untuk perangkat ini
-    const logQuery = `
-      SELECT s.id, s.device_id, s.heart_rate, s.spo2, s.status, s.hrv, s.sqi, s.timestamp, d.device_name 
-      FROM sensor_logs s
-      LEFT JOIN devices d ON s.device_id = d.id
-      WHERE s.device_id = ? 
-      ORDER BY s.timestamp DESC 
-      LIMIT 100
-    `;
-    const [logRows] = await db.query(logQuery, [device_id]);
-    logs = logRows.reverse();
     
-  } catch (err) {
-    console.error("Database query error in GET /dashboard:", err.message);
-    // Tetap render halaman meski log gagal, tapi kirim log kosong
+    // 2. Ambil data PENGGUNA YANG DITAUTKAN (PASTI ADA)
+    const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [device.user_id]);
+    if (userRows.length === 0) {
+      // Kasus aneh: user_id ada tapi user tidak ada. Hapus link & redirect.
+      await db.query("UPDATE devices SET user_id = NULL WHERE id = ?", [deviceId]);
+      return res.redirect(`/link-device/${deviceId}`);
+    }
+    const user = userRows[0];
+
+    // 3. Ambil data pendukung (logs, conditions, dll.)
+    const [logs] = await db.query(
+      "SELECT * FROM sensor_logs WHERE device_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 100", 
+      [deviceId, user.id]
+    );
+    const [allConditions] = await db.query("SELECT * FROM conditions");
+    const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [user.id]);
+    const userConditions = userCondRows.map(row => row.condition_id);
+    
+    const isProfileIncomplete = !user.date_of_birth || !user.height || !user.weight;
+
+    // 4. Render dashboard dengan SEMUA data
+    res.render('dashboard', {
+      device: device,
+      user: user, // <-- Variabel 'user' sekarang dijamin ada
+      logs: logs.reverse(),
+      allConditions: allConditions,
+      userConditions: userConditions,
+      isProfileIncomplete: isProfileIncomplete
+    });
+    
+  } catch (error) {
+    console.error("Error di /dashboard/:id:", error.message);
+    res.status(500).send('Server error');
   }
-  
-  // 5. Render halaman dashboard, sekarang dengan data 'device' dan 'logs'
-  res.render('dashboard', { logs: logs, device: device,
-    user: user, 
-    allConditions: allConditions, 
-    userConditions: userConditions, 
-    isProfileIncomplete: isProfileIncomplete
-  });
+});
+
+app.get('/device/dispatch/:id', async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [deviceId]);
+    if (deviceRows.length === 0) {
+      return res.status(404).send('Perangkat tidak ditemukan');
+    }
+    
+    const device = deviceRows[0];
+    
+    // Alur 1: Cek penautan
+    if (device.user_id) {
+      // Alur 3: SUDAH DITAUTKAN. Arahkan ke dashboard.
+      res.redirect(`/dashboard/${deviceId}`);
+    } else {
+      // Alur 2: BELUM DITAUTKAN. Arahkan ke halaman penautan baru.
+      res.redirect(`/link-device/${deviceId}`);
+    }
+  } catch (error) {
+    console.error("Error di dispatcher:", error.message);
+    res.status(500).send('Server error');
+  }
+});
+
+
+app.get('/link-device/:id', async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [deviceId]);
+    if (deviceRows.length === 0) {
+      return res.status(404).send('Perangkat tidak ditemukan');
+    }
+    
+    // Ambil semua pengguna untuk ditampilkan di daftar
+    const [allUsers] = await db.query("SELECT id, full_name, date_of_birth FROM users");
+    
+    // Render file EJS baru (Anda harus membuatnya)
+    res.render('link-device', { 
+      device: deviceRows[0],
+      allUsers: allUsers 
+    });
+    
+  } catch (error) {
+    console.error("Error di /link-device:", error.message);
+    res.status(500).send('Server error');
+  }
 });
 
 app.post('/api/profile', async (req, res) => {
@@ -267,11 +375,7 @@ app.post('/api/profile', async (req, res) => {
   }
 });
 
-/**
-* Rute API: Membuat Perangkat Baru
-* Endpoint ini digunakan (misal: via Postman) untuk mendaftarkan perangkat
-* dan mendapatkan auth_token.
-*/
+
 app.post('/api/devices', async (req, res) => {
   const { device_name } = req.body;
   if (!device_name) {
@@ -296,9 +400,7 @@ app.post('/api/devices', async (req, res) => {
   }
 });
 
-/**
-* Rute API: Melihat semua perangkat
-*/
+
 app.get('/api/devices', async (req, res) => {
   try {
     const [devices] = await db.query("SELECT id, device_name, status, last_seen FROM devices");
@@ -408,9 +510,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-/**
- * [API BARU 2] Menautkan perangkat ke pengguna yang SUDAH ADA
- */
+
 app.post('/api/devices/link-user', async (req, res) => {
   const { deviceId, userId } = req.body;
   if (!deviceId || !userId) {
@@ -425,40 +525,134 @@ app.post('/api/devices/link-user', async (req, res) => {
   }
 });
 
-/**
- * [API BARU 3] Membuat pengguna BARU dan langsung menautkannya ke perangkat
- */
 app.post('/api/users/create-and-link', async (req, res) => {
   const { deviceId, fullName, dateOfBirth, biologicalSex } = req.body;
-
+  
   if (!deviceId || !fullName || !dateOfBirth || !biologicalSex) {
     return res.status(400).json({ error: 'Semua field (nama, tgl lahir, sex) diperlukan' });
   }
-
+  
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-
+    
     // 1. Buat pengguna baru
     const [result] = await connection.query(
       "INSERT INTO users (full_name, date_of_birth, biological_sex) VALUES (?, ?, ?)",
       [fullName, dateOfBirth, biologicalSex]
     );
     const newUserId = result.insertId;
-
+    
     // 2. Tautkan pengguna baru ke perangkat
     await connection.query("UPDATE devices SET user_id = ? WHERE id = ?", [newUserId, deviceId]);
-
+    
     // 3. Commit
     await connection.commit();
     res.status(201).json({ message: 'Pengguna baru berhasil dibuat dan ditautkan!', newUserId: newUserId });
-
+    
   } catch (error) {
     await connection.rollback();
     console.error("Gagal membuat & menautkan pengguna:", error.message);
     res.status(500).json({ error: 'Gagal memproses permintaan' });
   } finally {
     connection.release();
+  }
+});
+
+app.post('/api/session/start', async (req, res) => {
+  const { deviceId, userId } = req.body;
+  if (!deviceId || !userId) {
+    return res.status(400).json({ error: 'deviceId dan userId diperlukan' });
+  }
+  
+  try {
+    await db.query("UPDATE devices SET user_id = ? WHERE id = ?", [userId, deviceId]);
+  } catch (dbError) {
+    console.error("Gagal update device user_id:", dbError.message);
+    return res.status(500).json({ error: 'Gagal memulai sesi di DB' });
+  }
+  
+  // Ambil data profil lengkap pengguna yang baru aktif
+  try {
+    const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [userId]);
+    const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [userId]);
+    const userConditions = userCondRows.map(row => row.condition_id);
+    
+    const sessionData = {
+      user: userRows[0],
+      userConditions: userConditions
+    };
+    
+    // Kirim data profil pengguna ke dashboard melalui Socket.IO
+    const deviceRoom = `device_${deviceId}`;
+    io.to(deviceRoom).emit('session-started', sessionData);
+    
+    res.json({ message: 'Sesi dimulai', sessionData: sessionData });
+    
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil data profil' });
+  }
+});
+
+app.post('/api/session/stop', async (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId) {
+    return res.status(400).json({ error: 'deviceId diperlukan' });
+  }
+  try {
+    await db.query("UPDATE devices SET user_id = NULL WHERE id = ?", [deviceId]);
+    
+    console.log(`[SESSION STOP] Sesi untuk Perangkat ${deviceId} dihentikan.`);
+    // Beri tahu dashboard bahwa sesi telah berakhir
+    const deviceRoom = `device_${deviceId}`;
+    io.to(deviceRoom).emit('session-stopped'); //
+    res.json({ message: 'Sesi dihentikan' });
+    
+  } catch (dbError) {
+    console.error("Gagal update device user_id ke NULL:", dbError.message);
+    return res.status(500).json({ error: 'Gagal menghentikan sesi di DB' });
+  }
+});
+
+app.get('/api/session/status', async (req, res) => {
+  const { deviceId } = req.query;
+  if (!deviceId) {
+    return res.status(400).json({ error: 'deviceId diperlukan' });
+  }
+  
+  try {
+    // 1. Cek perangkat dan lihat siapa user yang tertaut
+    const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [deviceId]);
+    if (deviceRows.length === 0) {
+      return res.status(404).json({ error: 'Perangkat tidak ditemukan' });
+    }
+    
+    const device = deviceRows[0];
+    const activeUserId = device.user_id;
+    
+    if (!activeUserId) {
+      // Tidak ada sesi aktif
+      return res.json({ sessionActive: false });
+    }
+    
+    // 2. Jika ADA sesi, ambil data lengkap pengguna
+    const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [activeUserId]);
+    const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [activeUserId]);
+    const userConditions = userCondRows.map(row => row.condition_id);
+    
+    // 3. Kirim kembali data sesi lengkap
+    res.json({
+      sessionActive: true,
+      sessionData: {
+        device: device,
+        user: userRows[0],
+        userConditions: userConditions
+      }
+    });
+    
+  } catch (error) {
+    console.error("Gagal mengambil status sesi:", error.message);
+    res.status(500).json({ error: 'Gagal mengambil status sesi' });
   }
 });
 
@@ -544,18 +738,19 @@ cron.schedule('*/15 * * * *', runEwsCalculationForAllDevices);
 * Menyimpan log sensor ke database.
 * Diperbarui untuk menerima parameter baru (hrv, sqi, timestamp).
 */
-async function saveToDatabase(deviceId, hr, sp, stat, hrv, sqi, ts) {
+async function saveToDatabase(deviceId, userId, hr, sp, stat, hrv, sqi, ts) {
   
   const query = `
     INSERT INTO sensor_logs 
-    (device_id, heart_rate, spo2, status, hrv, sqi, timestamp) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    (device_id, user_id, heart_rate, spo2, status, hrv, sqi, timestamp) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   try {
     const wibTimeZone = "Asia/Jakarta";
     const values = [
       deviceId, 
+      userId || null,
       hr || null, 
       sp || null, 
       stat || null, 
@@ -568,6 +763,7 @@ async function saveToDatabase(deviceId, hr, sp, stat, hrv, sqi, ts) {
     const newLog = { 
       id: result.insertId,
       device_id: deviceId, 
+      user_id: userId, 
       heart_rate: hr || null, 
       spo2: sp || null,
       status: stat || null,

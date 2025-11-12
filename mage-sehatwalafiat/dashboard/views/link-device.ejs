@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tautkan Perangkat - <%= device.device_name %></title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  
+</head>
+<body data-device-id="<%= device.id %>" style="background-color: #f8f9fa;">
+  
+  <header class="p-3 px-4 bg-white shadow-sm">
+    <h4 class="h4 mb-0 fw-bold"><i class="fa-solid fa-heart-pulse text-primary"></i> SEHATI Monitoring</h4>
+  </header>
+
+  <main class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-lg-8 col-md-10">
+      <div class="card shadow-sm">
+        <div class="card-body p-4 p-md-5">
+          <h3 class="card-title text-center mb-2">Mulai Sesi Pasien</h3>
+          <p class="card-subtitle text-center text-muted mb-4">
+            Perangkat: <strong><%= device.device_name %></strong>
+          </p>
+          
+          <ul class="nav nav-tabs" id="linkUserTab" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="link-existing-tab" data-bs-toggle="tab" data-bs-target="#link-existing-content" type="button" role="tab">Pilih Pengguna</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="link-new-tab" data-bs-toggle="tab" data-bs-target="#link-new-content" type="button" role="tab">Tambah Pengguna Baru</button></li>
+          </ul>
+          
+          <div class="tab-content pt-3" id="linkUserTabContent">
+            <div class="tab-pane fade show active" id="link-existing-content" role="tabpanel">
+              <p>Pilih pengguna dari daftar di bawah ini untuk memulai sesi.</p>
+              <div class="existing-user-list-container" style="max-height: 300px; overflow-y: auto;">
+                <ul class="list-group" id="existing-user-list">
+                  <% allUsers.forEach(user => { %>
+                    <li class="list-group-item list-group-item-action" data-user-id="<%= user.id %>" style="cursor: pointer;">
+                      <%= user.full_name %> (Lahir: <%= user.date_of_birth ? new Date(user.date_of_birth).toLocaleDateString('id-ID') : 'N/A' %>)
+                    </li>
+                  <% }); %>
+                  <% if (allUsers.length === 0) { %>
+                    <li class="list-group-item">Belum ada pengguna terdaftar.</li>
+                  <% } %>
+                </ul>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="link-new-content" role="tabpanel">
+              <p>Buat profil pengguna baru dan mulai sesi langsung.</p>
+              <form id="new-user-form">
+                <div class="mb-3"><label for="new-user-name" class="form-label">Nama Lengkap</label><input type="text" class="form-control" id="new-user-name" required></div>
+                <div class="mb-3"><label for="new-user-dob" class="form-label">Tanggal Lahir</label><input type="date" class="form-control" id="new-user-dob" required></div>
+                <div class="mb-3"><label for="new-user-sex" class="form-label">Jenis Kelamin Biologis</label><select id="new-user-sex" class="form-select" required><option value="">Pilih...</option><option value="MALE">Laki-laki</option><option value="FEMALE">Perempuan</option><option value="OTHER">Lainnya</option></select></div>
+              </form>
+            </div>
+          </div>
+          
+          <div class="mt-4 d-flex justify-content-end align-items-center">
+            <span id="page-status" class="me-auto text-danger"></span>
+            <button type="button" class="btn btn-primary" id="link-existing-user-btn">Mulai Sesi</button>
+            <button type="submit" class="btn btn-success d-none" id="create-and-link-user-btn" form="new-user-form">Buat & Mulai Sesi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" ...></script>
+  <script src="/js/link-device.js"></script>
+</body>
+</html>
