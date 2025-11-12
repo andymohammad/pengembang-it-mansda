@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard - <%= device.device_name %></title>
   
+  <!-- 1. Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   
+  <!-- 2. Font Awesome (untuk ikon) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   
+  <!-- 3. CSS Kustom Anda -->
   <link rel="stylesheet" href="/css/style.css">
-
   <style>
     /* CSS Kustom untuk menyesuaikan UI baru */
     body {
@@ -37,26 +39,21 @@
     .vital-card small {
       font-size: 0.8rem;
     }
-
-    /* CSS dari EWS (Gauge & Teks) */
-    .ews-gauge-container {
-      position: relative;
-      max-width: 280px;
-      margin: 1rem auto;
-    }
-    .gauge-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+    
+    /* CSS dari EWS kita sebelumnya */
+    .ews-card {
       text-align: center;
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin: 1rem auto;
+      border: 1px solid #dee2e6;
     }
-    .gauge-text .score {
+    .ews-card .score {
       font-size: 3.5rem;
       font-weight: bold;
       line-height: 1;
     }
-    .gauge-text .label {
+    .ews-card .label {
       font-size: 1.1rem;
       font-weight: 500;
     }
@@ -74,11 +71,12 @@
       margin-right: 10px;
       color: #0d6efd;
     }
-    
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
 </head>
 
-<body data-device-id="<%= device.id %>" data-user-id="<%= user.id %>">
+<body data-device-id="<%= device.id %>" data-user-id="<%= user.id %>"">
   
   <header class="d-flex justify-content-between align-items-center p-3 px-4 bg-white shadow-sm sticky-top">
     <h4 class="h4 mb-0 fw-bold">
@@ -86,428 +84,565 @@
       SEHATI Monitoring
     </h4>
     <% 
-      // Tentukan kelas warna DAN kelas ikon
-      const statusClass = device.status === 'online' ? 'bg-success' : 'bg-danger';
-      const iconClass = device.status === 'online' ? 'fa-circle-check' : 'fa-circle-xmark';
+    const statusClass = device.status === 'online' ? 'bg-success' : 'bg-danger';
+    const iconClass = device.status === 'online' ? 'fa-circle-check' : 'fa-circle-xmark';
+    
     %>
+    
     <div class="badge fs-6 <%= statusClass %>" id="device-status-badge">
       <i id="device-status-icon" class="fa-solid <%= iconClass %> me-2"></i>
       <span id="device-status-name"><%= device.device_name %></span>
     </div>
   </header>
-
+  
   <main class="container-fluid px-4 mt-4">
-
     <div class="row g-4 mb-4">
-
       <div class="col-lg-4">
         <div class="card shadow-sm h-100">
           <div class="card-body p-4" id="patient-summary-card">
-            
-            <div id="patient-summary-active" class="">
+            <div id="patient-summary-active">
               <h5 class="card-title fw-bold mb-3">Ringkasan Kesehatan Pasien</h5>
               
-              <h4 class="h4 fw-bold text-primary mb-3" id="profile-full_name">Nama Pasien</h4>
+              <h4 class="h4 fw-bold text-primary mb-3" id="profile-full_name"><%= user.full_name %></h4>
               <ul class="list-group list-group-flush profile-list mb-3">
+                
                 <li class="list-group-item">
                   <i class="fa-solid fa-birthday-cake"></i> 
-                  <strong>Usia:</strong>&nbsp; <span id="profile-age">--</span>
+                  <strong>Usia:</strong>&nbsp;
+                  <span id="profile-age"> <% if (user.date_of_birth) { %> <%= new Date().getFullYear() - new Date(user.date_of_birth).getFullYear() %> tahun <% } else { %> -- <% } %> </span>
                 </li>
+                
                 <li class="list-group-item">
                   <i class="fa-solid fa-venus-mars"></i> 
-                  <strong>Jenis Kelamin:</strong>&nbsp; <span id="profile-sex">--</span>
-                </li>
-                <li class="list-group-item">
-                  <i class="fa-solid fa-weight-scale"></i> 
-                  <strong>Berat:</strong>&nbsp; <span id="profile-weight">--</span> kg
-                </li>
-                <li class="list-group-item">
-                  <i class="fa-solid fa-calculator"></i> 
-                  <strong>BMI:</strong>&nbsp; <span id="profile-bmi">--</span>
-                </li>
-              </ul>
-
-              <h6 class="text-muted text-center mt-4">Skor Peringatan Dini (EWS)</h6>
-              <div class="ews-gauge-container position-relative" style="max-width: 280px; margin: 1rem auto;">
-                <canvas id="ewsGaugeChart"></canvas>
-                <div class="gauge-text position-absolute top-50 start-50 translate-middle text-center">
-                  <span class="score d-block" id="ews-score-text">0</span>
-                  <span class="label d-block" id="ews-label-text">Risiko Rendah</span>
-                </div>
-              </div>
-              <p class="text-center text-muted small" id="ews-timestamp">
-                Menghitung...
-              </p>
-
-              <button class="btn btn-danger w-100 mt-3" id="stop-session-btn">
-                <i class="fa-solid fa-stop-circle me-2"></i>Hentikan Sesi
-              </button>
-            </div>
-            
-          </div>
-        </div>
-      </div>
-
-      <div class="col-lg-8">
-        <% 
-          // Data ini hanya untuk tampilan awal (standby)
-          const lastLog = null;
-          const lastTimestamp = 'Menunggu Sesi...';
-        %>
-        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
-
-          <div class="col">
-            <div class="card shadow-sm h-100 vital-card">
-              <div class="card-body">
-                <div class="icon me-3 text-danger"><i class="fa-solid fa-heart-pulse"></i></div>
-                <div>
-                  <div class="label">Detak Jantung</div>
-                  <div class="value"><span id="current-hr">--</span> bpm</div>
-                  <small id="hr-timestamp"><%= lastTimestamp %></small>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col">
-            <div class="card shadow-sm h-100 vital-card">
-              <div class="card-body">
-                <div class="icon me-3 text-primary"><i class="fa-solid fa-lungs"></i></div>
-                <div>
-                  <div class="label">Kadar Oksigen (SpO2)</div>
-                  <div class="value"><span id="current-spo2">--</span> %</div>
-                  <small id="spo2-timestamp"><%= lastTimestamp %></small>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col">
-            <div class="card shadow-sm h-100 vital-card">
-              <div class="card-body">
-                <div class="icon me-3 text-success"><i class="fa-solid fa-wave-square"></i></div>
-                <div>
-                  <div class="label">HRV</div>
-                  <div class="value"><span id="current-hrv">--</span></div>
-                  <small id="hrv-timestamp"><%= lastTimestamp %></small>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col">
-            <div class="card shadow-sm h-100 vital-card">
-              <div class="card-body">
-                <div class="icon me-3 text-warning"><i class="fa-solid fa-signal"></i></div>
-                <div>
-                  <div class="label">Kualitas Sinyal (SQI)</div>
-                  <div class="value"><span id="current-sqi">--</span> %</div>
-                  <small id="sqi-timestamp"><%= lastTimestamp %></small>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="col">
-            <div class="card shadow-sm h-100 vital-card">
-              <div class="card-body">
-                <div class="icon me-3 text-info"><i class="fa-solid fa-clipboard-check"></i></div>
-                <div>
-                  <div class="label">Status</div>
-                  <div class="value fs-2" id="current-status">Standby</div>
-                  <small id="status-timestamp"><%= lastTimestamp %></small>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div> </div> <div class="row">
-      <div class="col-12">
-        
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="realtime-tab" data-bs-toggle="tab" data-bs-target="#realtime-content" type="button" role="tab">Riwayat Data Vital</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="ews-tab" data-bs-toggle="tab" data-bs-target="#ews-content" type="button" role="tab">Analisis EWS</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-content" type="button" role="tab">
-              Profil Kesehatan
-              <span id="profile-alert-badge" class="badge bg-danger ms-1 d-none">!</span>
-            </button>
-          </li>
-        </ul>
-
-        <div class="tab-content" id="myTabContent">
-          
-          <div class="tab-pane fade show active" id="realtime-content" role="tabpanel" aria-labelledby="realtime-tab">
-            <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
-              <div class="card-body p-4 position-relative">
-                
-                
-                
-                <div id="realtime-content-wrapper" class="">
-                  <section class="filter-container card shadow-sm mb-4">
-                    <div class="card-body d-flex gap-2 align-items-center flex-wrap">
-                      <div>
-                        <label for="filter-start" class="form-label">Mulai:</label>
-                        <input type="datetime-local" id="filter-start" class="form-control">
+                  <strong>Jenis Kelamin:</strong>&nbsp;
+                  <span>
+                    <% if (user.biological_sex === 'MALE') { %> Laki-laki
+                      <% } else if (user.biological_sex === 'FEMALE') { %> Perempuan
+                        <% } else { %> -- <% } %>
+                      </span>
+                    </li>
+                    
+                    <li class="list-group-item">
+                      <i class="fa-solid fa-ruler-vertical"></i> 
+                      <strong>Tinggi:</strong>&nbsp;
+                      <span><%= user.height_cm || '--' %> cm</span>
+                    </li>
+                    
+                    <li class="list-group-item">
+                      <i class="fa-solid fa-weight-hanging"></i> 
+                      <strong>Berat:</strong>&nbsp;
+                      <span><%= user.weight_kg || '--' %> kg</span>
+                    </li>
+                    
+                    <li class="list-group-item">
+                      <i class="fa-solid fa-hand-holding-droplet"></i>
+                      <strong>Gol. Darah:</strong>&nbsp;
+                      <span><%= user.blood_type || '--' %></span>
+                    </li>
+                  </ul>
+                  <h6 class="h6 fw-bold mt-4">Faktor Risiko</h6>
+                  <div id="summary-risk-factors" class="mb-3">
+                    <% 
+                    // Logika untuk memfilter nama kondisi (data dari [cite: 98-99])
+                    const userConditionNames = allConditions
+                    .filter(condition => userConditions.includes(condition.id))
+                    .map(condition => condition.condition_name);
+                    %>
+                    
+                    <% if (userConditionNames.length > 0) { %>
+                      <% userConditionNames.forEach(name => { %>
+                        <span class="badge bg-warning text-dark me-1 mb-1"><%= name %></span>
+                        <% }) %>
+                        <% } else { %>
+                          <span class="text-muted small">Tidak ada kondisi terdata.</span>
+                          <% } %>
+                        </div>
+                        
+                        <!-- <canvas id="ewsGaugeChart"></canvas> -->
+                        
+                        <button class="btn btn-danger w-100 mt-3" id="stop-session-btn">
+                          <i class="fa-solid fa-stop-circle me-2"></i>Hentikan Sesi
+                        </button>
                       </div>
-                      <div>
-                        <label for="filter-end" class="form-label">Selesai:</label>
-                        <input type="datetime-local" id="filter-end" class="form-control">
-                      </div>
-                      <button id="filter-button" class="btn btn-primary mt-4">Filter</button>
-                      <button id="reset-button" class="btn btn-secondary mt-4">Reset (Live)</button>
                     </div>
-                  </section>
-
-                  <section class="stats-summary-container mb-4">
-                    <h3 class="h5 mb-2">Ringkasan Statistik</h3> 
-                    <p class="text-muted mb-3" id="stat-period-text">Periode: --</p>
-                    <div class="row g-3">
-                      <div class="col-md-4">
-                        <div class="card h-100">
-                          <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Detak Jantung (HR)</h6>
-                            <div class="d-flex justify-content-between"><span>Rata-rata:</span><strong id="stat-avg-hr">-- bpm</strong></div>
-                            <div class="d-flex justify-content-between"><span>Tertinggi:</span><strong id="stat-max-hr" class="text-danger">-- bpm</strong></div>
-                            <div class="d-flex justify-content-between"><span>Terendah:</span><strong id="stat-min-hr" class="text-primary">-- bpm</strong></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-4">
-                        <div class="card h-100">
-                          <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Kadar Oksigen (SpO2)</h6>
-                            <div class="d-flex justify-content-between"><span>Rata-rata:</span><strong id="stat-avg-spo2">-- %</strong></div>
-                            <div class="d-flex justify-content-between"><span>Terendah:</span><strong id="stat-min-spo2" class="text-danger">-- %</strong></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-4">
-                        <div class="card h-100">
-                          <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Analisis Data</h6>
-                            <a href="#" class="d-flex justify-content-between text-decoration-none text-dark" id="view-warnings-button" data-bs-toggle="modal" data-bs-target="#warningListModal" title="Klik untuk melihat detail peringatan">
-                              <span>Jumlah Peringatan:</span>
-                              <strong id="stat-events" class="text-warning">-- kejadian</strong>
-                            </a>
+                  </div>
+                </div>
+                
+                <!-- Kolom Kanan: Vital Signs -->
+                <div class="col-lg-8">
+                  <% 
+                  const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
+                  const lastTimestamp = lastLog ? new Date(lastLog.TIMESTAMP).toLocaleString('id-ID') : (device.last_seen ? new Date(device.last_seen).toLocaleString('id-ID') : 'Menunggu Data...');
+                  %>
+                  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+                    
+                    <!-- Kartu 1: Detak Jantung -->
+                    <div class="col">
+                      <div class="card shadow-sm h-100 vital-card">
+                        <div class="card-body">
+                          <div class="icon me-3 text-danger"><i class="fa-solid fa-heart-pulse"></i></div>
+                          <div>
+                            <div class="label">Detak Jantung</div>
+                            <div class="value"><span id="current-hr"><%= lastLog ? lastLog.heart_rate : '--' %></span> bpm</div>
+                            <small id="hr-timestamp"><%= lastTimestamp %></small>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </section>
-
-                  <section class="history-chart card shadow-sm">
+                    
+                    <!-- Kartu 2: Kadar Oksigen (SpO2) -->
+                    <div class="col">
+                      <div class="card shadow-sm h-100 vital-card">
+                        <div class="card-body">
+                          <div class="icon me-3 text-primary"><i class="fa-solid fa-lungs"></i></div>
+                          <div>
+                            <div class="label">Kadar Oksigen</div>
+                            <div class="value"><span id="current-spo2"><%= lastLog ? lastLog.spo2 : '--' %></span> %</div>
+                            <small id="spo2-timestamp"><%= lastTimestamp %></small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Kartu 3: HRV -->
+                    <div class="col">
+                      <div class="card shadow-sm h-100 vital-card">
+                        <div class="card-body">
+                          <div class="icon me-3 text-success"><i class="fa-solid fa-wave-square"></i></div>
+                          <div>
+                            <div class="label">HRV</div>
+                            <div class="value"><span id="current-hrv"><%= lastLog ? (lastLog.hrv || '--') : '--' %></span></div>
+                            <small id="hrv-timestamp"><%= lastTimestamp %></small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Kartu 4: SQI -->
+                    <div class="col">
+                      <div class="card shadow-sm h-100 vital-card">
+                        <div class="card-body">
+                          <div class="icon me-3 text-warning"><i class="fa-solid fa-signal"></i></div>
+                          <div>
+                            <div class="label">Kualitas Sinyal (SQI)</div>
+                            <div class="value"><span id="current-sqi"><%= lastLog ? (lastLog.sqi || '--') : '--' %></span> %</div>
+                            <small id="sqi-timestamp"><%= lastTimestamp %></small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Kartu 5: Status -->
+                    <div class="col">
+                      <div class="card shadow-sm h-100 vital-card">
+                        <div class="card-body">
+                          <div class="icon me-3 text-info"><i class="fa-solid fa-clipboard-check"></i></div>
+                          <div>
+                            <div class="label">Status</div>
+                            <div class="value fs-2" id="current-status"><%= lastLog ? (lastLog.status || 'NORMAL') : (device.status === 'online' ? 'Online' : 'Offline') %></div>
+                            <small id="status-timestamp"><%= lastTimestamp %></small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row">
+                <div class="col-12">
+                  <div class="card shadow-sm h-100 ">
                     <div class="card-body">
-                      <h2 class="h5" id="chart-title">Riwayat Data (Log Terakhir)</h2>
-                      <canvas id="sensorHistoryChart"></canvas>
-                    </div>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="tab-pane fade" id="ews-content" role="tabpanel" aria-labelledby="ews-tab">
-            <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
-              <div class="card-body p-4 position-relative">
-
-                
-                <div id="ews-content-wrapper" class="">
-                  <div class="row p-3 g-4">
-                    <div class="col-lg-4">
-                      <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                          <h5 class="card-title text-center">Skor EWS Saat Ini</h5>
-                          <div class="text-center mt-3">
-                            <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#ewsInfoModal">
-                              Apa itu Skor Peringatan Dini (EWS)?
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="col-lg-8">
-                      <div class="card shadow-sm">
-                        <div class="card-body">
-                          <h5 class="card-title">Riwayat Skor EWS</h5>
-                          <div class="d-flex gap-2 align-items-center flex-wrap border-bottom pb-3 mb-3">
-                            <div>
-                              <label for="ews-filter-start" class="form-label form-label-sm">Mulai:</label>
-                              <input type="datetime-local" id="ews-filter-start" class="form-control form-control-sm">
-                            </div>
-                            <div>
-                              <label for="ews-filter-end" class="form-label form-label-sm">Selesai:</label>
-                              <input type="datetime-local" id="ews-filter-end" class="form-control form-control-sm">
-                            </div>
-                            <button id="ews-filter-button" class="btn btn-primary btn-sm mt-4">Filter EWS</button>
-                            <button id="ews-reset-button" class="btn btn-secondary btn-sm mt-4">Reset</button>
-                          </div>
-                          <canvas id="ewsHistoryChart"></canvas>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="tab-pane fade" id="profile-content" role="tabpanel" aria-labelledby="profile-tab">
-            <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
-              <div class="card-body p-4 position-relative">
-
-                
-                <div id="profile-content-wrapper" class="">
-                  <div class="row p-3 g-4 justify-content-center">
-                    <div class="col-lg-10">
+                      <!-- Navigasi Tab -->
+                      <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                          <button class="nav-link" id="realtime-tab" data-bs-toggle="tab" data-bs-target="#realtime-content" type="button" role="tab">Riwayat Data Vital</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                          <button class="nav-link" id="ews-tab" data-bs-toggle="tab" data-bs-target="#ews-content" type="button" role="tab">Analisis EWS</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                          <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-content" type="button" role="tab">
+                            Profil Kesehatan
+                            <% if (isProfileIncomplete) { %><span class="badge bg-danger ms-1">!</span><% } %>
+                          </button>
+                        </li>
+                      </ul>
                       
-                      <div class="alert alert-warning d-none" role="alert" id="profile-incomplete-alert">
-                        <h4 class="alert-heading">Profil Kesehatan Belum Lengkap!</h4>
-                        <p>Silakan lengkapi data profil di bawah ini. Data ini (seperti usia, berat badan, dan kondisi medis) sangat penting untuk mengkalibrasi algoritma EWS (Skor Peringatan Dini) agar lebih akurat.</p>
-                      </div>
-
-                      <div class="card shadow-sm">
-                        <form id="profile-form">
-                          <div class="card-body">
-                            <h5 class="card-title">Profil Pengguna & Biometrik</h5>
-                            <p class="card-subtitle mb-3 text-muted">Data ini digunakan untuk personalisasi algoritma kesehatan.</p>
-                            <div class="row g-3">
-                              <div class="col-md-6"><label for="prof-name" class="form-label">Nama Lengkap</label><input type="text" class="form-control" id="prof-name" required></div>
-                              <div class="col-md-6"><label for="prof-dob" class="form-label">Tanggal Lahir</label><input type="date" class="form-control" id="prof-dob" required></div>
-                              <div class="col-md-4"><label for="prof-sex" class="form-label">Jenis Kelamin Biologis</label><select id="prof-sex" class="form-select" required><option value="MALE">Laki-laki</option><option value="FEMALE">Perempuan</option><option value="OTHER">Lainnya</option></select></div>
-                              <div class="col-md-3"><label for="prof-height" class="form-label">Tinggi (cm)</label><input type="number" class="form-control" id="prof-height" required></div>
-                              <div class="col-md-3"><label for="prof-weight" class="form-label">Berat (kg)</label><input type="number" step="0.1" class="form-control" id="prof-weight" required></div>
-                              <div class="col-md-2"><label for="prof-blood" class="form-label">Gol. Darah</label><select id="prof-blood" class="form-select"><option value="">Pilih...</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option><option value="O+">O+</option><option value="O-">O-</option></select></div>
+                      <!-- Konten Tab -->
+                      <div class="tab-content" id="myTabContent">
+                        <div class="tab-pane fade show active" id="realtime-content" role="tabpanel" aria-labelledby="realtime-tab">
+                          <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
+                            <div class="card-body p-4 position-relative">
+                              
+                              <div class_id="realtime-content-wrapper">
+                                
+                                <!-- Filter Real-time -->
+                                <section class="filter-container card shadow-sm mb-4">
+                                  <div class="card-body d-flex gap-2 align-items-center flex-wrap">
+                                    <div>
+                                      <label for="filter-start" class="form-label">Mulai:</label>
+                                      <input type="datetime-local" id="filter-start" class="form-control">
+                                    </div>
+                                    <div>
+                                      <label for="filter-end" class="form-label">Selesai:</label>
+                                      <input type="datetime-local" id="filter-end" class="form-control">
+                                    </div>
+                                    <button id="filter-button" class="btn btn-primary mt-4">Filter</button>
+                                    <button id="reset-button" class="btn btn-secondary mt-4">Reset (Live)</button>
+                                  </div>
+                                </section>
+                                
+                                <!-- Panel Statistik Real-time -->
+                                <section class="stats-summary-container mb-4">
+                                  <h3 class="h5 mb-2">Ringkasan Statistik</h3> 
+                                  <p class="text-muted mb-3" id="stat-period-text">Periode: --</p>
+                                  <div class="row g-3">
+                                    <div class="col-md-4">
+                                      <div class="card h-100">
+                                        <div class="card-body">
+                                          <h6 class="card-subtitle mb-2 text-muted">Detak Jantung (HR)</h6>
+                                          <div class="d-flex justify-content-between"><span>Rata-rata:</span><strong id="stat-avg-hr">-- bpm</strong></div>
+                                          <div class="d-flex justify-content-between"><span>Tertinggi:</span><strong id="stat-max-hr" class="text-danger">-- bpm</strong></div>
+                                          <div class="d-flex justify-content-between"><span>Terendah:</span><strong id="stat-min-hr" class="text-primary">-- bpm</strong></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                      <div class="card h-100">
+                                        <div class="card-body">
+                                          <h6 class="card-subtitle mb-2 text-muted">Kadar Oksigen (SpO2)</h6>
+                                          <div class="d-flex justify-content-between"><span>Rata-rata:</span><strong id="stat-avg-spo2">-- %</strong></div>
+                                          <div class="d-flex justify-content-between"><span>Terendah:</span><strong id="stat-min-spo2" class="text-danger">-- %</strong></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                      <div class="card h-100">
+                                        <div class="card-body">
+                                          <h6 class="card-subtitle mb-2 text-muted">Analisis Data</h6>
+                                          <div class="d-flex justify-content-between"><span>Rata-rata HRV:</span><strong id="stat-avg-hrv">--</strong></div>
+                                          <div class="d-flex justify-content-between"><span>Rata-rata SQI:</span><strong id="stat-avg-sqi">-- %</strong></div>
+                                          <a href="#" class="d-flex justify-content-between text-decoration-none text-dark" 
+                                          id="view-warnings-button" data-bs-toggle="modal" data-bs-target="#warningListModal" 
+                                          title="Klik untuk melihat detail peringatan">
+                                          <span>Jumlah Peringatan:</span>
+                                          <strong id="stat-events" class="text-warning">-- kejadian</strong>
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </section>
+                              
+                              <!-- Grafik Real-time -->
+                              <section class="history-chart card shadow-sm">
+                                <div class="card-body">
+                                  <h2 class="h5" id="chart-title">Riwayat Data (Log Terakhir)</h2>
+                                  <canvas id="sensorHistoryChart"></canvas>
+                                </div>
+                              </section>
                             </div>
-                            <hr class="my-4">
-                            <h5 class="h6">Kondisi Medis (Faktor Risiko)</h5>
-                            <p class="text-muted small">Centang semua kondisi yang dimiliki pengguna. Ini akan sangat mempengaruhi akurasi Skor EWS.</p>
-                            <div class="row g-2" id="conditions-checkbox-list">
-                              </div>
                           </div>
-                          <div class="card-footer text-end">
-                            <button type="submit" class="btn btn-primary" id="save-profile-btn">Simpan Profil</button>
-                            <div id="profile-save-status" class="ms-3 d-inline"></div>
-                          </div>
-                        </form>
+                        </div>
                       </div>
-
+                      
+                      <!-- ============================================= -->
+                      <!-- Tab 2: Analisis EWS -->
+                      <!-- ============================================= -->
+                      <div class="tab-pane fade" id="ews-content" role="tabpanel" aria-labelledby="ews-tab">
+                        <!-- [POIN 2] Memindahkan konten EWS ke sini -->
+                        <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
+                          <div class="row p-3 g-4">
+                            <!-- Kolom Kiri: Skor & Edukasi -->
+                            <div class="col-lg-4">
+                              <div class="card shadow-sm mb-4">
+                                <div class="card-body">
+                                  
+                                  <div class_id="ews-content-wrapper" class="">
+                                    
+                                    <h5 class="card-title text-center">Skor EWS Saat Ini</h5>
+                                    <div class="ews-gauge-container position-relative" style="max-width: 280px; margin: 1rem auto;">
+                                      
+                                      <canvas id="ewsGaugeChart"></canvas>
+                                      
+                                      <div class="gauge-text position-absolute top-50 start-50 translate-middle text-center">
+                                        <span class="score d-block" id="ews-score-text" style="font-size: 3.5rem; font-weight: bold; line-height: 1;">
+                                          <%= device.ews_score || 0 %>
+                                        </span>
+                                        <span class="label d-block" id="ews-label-text" style="font-size: 1.1rem; font-weight: 500;">
+                                          ...
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p class="text-center text-muted" id="ews-timestamp">
+                                      Terakhir dihitung: <%= new Date(device.last_seen || Date.now()).toLocaleString('id-ID') %>
+                                    </p>
+                                    <div class="text-center mt-3">
+                                      <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#ewsInfoModal">
+                                        Apa itu Skor Peringatan Dini (EWS)?
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <!-- Kolom Kanan: Riwayat EWS -->
+                            <div class="col-lg-8">
+                              <div class="card shadow-sm">
+                                <div class="card-body">
+                                  <h5 class="card-title">Riwayat Skor EWS</h5>
+                                  <div class="standby-overlay" id="ews-standby">
+                                    <p>Mulai sesi pasien untuk melihat riwayat data.</p>
+                                  </div>
+                                  
+                                  <div class_id="ews-content-wrapper" class="">
+                                    
+                                    <div class="d-flex gap-2 align-items-center flex-wrap border-bottom pb-3 mb-3">
+                                      <div>
+                                        <label for="ews-filter-start" class="form-label form-label-sm">Mulai:</label>
+                                        <input type="datetime-local" id="ews-filter-start" class="form-control form-control-sm">
+                                      </div>
+                                      <div>
+                                        <label for="ews-filter-end" class="form-label form-label-sm">Selesai:</label>
+                                        <input type="datetime-local" id="ews-filter-end" class="form-control form-control-sm">
+                                      </div>
+                                      <button id="ews-filter-button" class="btn btn-primary btn-sm mt-4">Filter EWS</button>
+                                      <button id="ews-reset-button" class="btn btn-secondary btn-sm mt-4">Reset</button>
+                                    </div>
+                                    <canvas id="ewsHistoryChart"></canvas>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Tab 3: Profil Kesehatan -->
+                      <div class="tab-pane fade" id="profile-content" role="tabpanel" aria-labelledby="profile-tab">
+                        <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom">
+                          <div class="row p-3 g-4 justify-content-center">
+                            <div class="col-lg-10">
+                              <% if (isProfileIncomplete) { %>
+                                <div class="alert alert-warning" role="alert">
+                                  <h4 class="alert-heading">Profil Kesehatan Belum Lengkap!</h4>
+                                  <p>Silakan lengkapi data profil di bawah ini. Data ini (seperti usia, berat badan, dan kondisi medis) sangat penting untuk mengkalibrasi algoritma EWS (Skor Peringatan Dini) agar lebih akurat.</p>
+                                </div>
+                                <% } %>
+                                <% if (!user) { %>
+                                  <div class="alert alert-danger" role="alert">
+                                    <h4 class="alert-heading">Perangkat Belum Ditautkan</h4>
+                                    <p>Perangkat ini belum terhubung ke profil pengguna. Silakan tautkan perangkat ke pengguna yang sudah ada atau buat pengguna baru.</p>
+                                    <hr>
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#linkUserModal" id="link-user-button">
+                                      Tautkan Pengguna
+                                    </button>
+                                  </div>
+                                  <% } else { %>
+                                    <!-- Formulir Profil -->
+                                    <div class="card shadow-sm">
+                                      <form id="profile-form" data-user-id="<%= user.id %>">
+                                        <div class="card-body">
+                                          <h5 class="card-title">Profil Pengguna & Biometrik</h5>
+                                          <p class="card-subtitle mb-3 text-muted">Data ini digunakan untuk personalisasi algoritma kesehatan.</p>
+                                          <div class="row g-3">
+                                            <div class="col-md-6"><label for="prof-name" class="form-label">Nama Lengkap</label><input type="text" class="form-control" id="prof-name" value="<%= user.full_name %>" required></div>
+                                            <div class="col-md-6"><label for="prof-dob" class="form-label">Tanggal Lahir</label><input type="date" class="form-control" id="prof-dob" value="<%= user.date_of_birth ? user.date_of_birth.toISOString().split('T')[0] : '' %>" required></div>
+                                            <div class="col-md-4"><label for="prof-sex" class="form-label">Jenis Kelamin Biologis</label><select id="prof-sex" class="form-select" required><option value="MALE" <%= user.biological_sex === 'MALE' ? 'selected' : '' %>>Laki-laki</option><option value="FEMALE" <%= user.biological_sex === 'FEMALE' ? 'selected' : '' %>>Perempuan</option><option value="OTHER" <%= user.biological_sex === 'OTHER' ? 'selected' : '' %>>Lainnya</option></select></div>
+                                            <div class="col-md-3"><label for="prof-height" class="form-label">Tinggi (cm)</label><input type="number" class="form-control" id="prof-height" value="<%= user.height_cm %>" required></div>
+                                            <div class="col-md-3"><label for="prof-weight" class="form-label">Berat (kg)</label><input type="number" step="0.1" class="form-control" id="prof-weight" value="<%= user.weight_kg %>" required></div>
+                                            <div class="col-md-2"><label for="prof-blood" class="form-label">Gol. Darah</label><select id="prof-blood" class="form-select"><option value="" <%= !user.blood_type ? 'selected' : '' %>>Pilih...</option><option value="A+" <%= user.blood_type === 'A+' ? 'selected' : '' %>>A+</option><option value="A-" <%= user.blood_type === 'A-' ? 'selected' : '' %>>A-</option><option value="B+" <%= user.blood_type === 'B+' ? 'selected' : '' %>>B+</option><option value="B-" <%= user.blood_type === 'B-' ? 'selected' : '' %>>B-</option><option value="AB+" <%= user.blood_type === 'AB+' ? 'selected' : '' %>>AB+</option><option value="AB-" <%= user.blood_type === 'AB-' ? 'selected' : '' %>>AB-</option><option value="O+" <%= user.blood_type === 'O+' ? 'selected' : '' %>>O+</option><option value="O-" <%= user.blood_type === 'O-' ? 'selected' : '' %>>O-</option></select></div>
+                                          </div>
+                                          <hr class="my-4">
+                                          <h5 class="h6">Kondisi Medis (Faktor Risiko)</h5>
+                                          <p class="text-muted small">Centang semua kondisi yang dimiliki pengguna. Ini akan sangat mempengaruhi akurasi Skor EWS.</p>
+                                          <div class="row g-2" id="conditions-checkbox-list">
+                                            <% allConditions.forEach(condition => { %>
+                                              <% const isChecked = userConditions.includes(condition.id); %>
+                                              <div class="col-md-4">
+                                                <div class="form-check">
+                                                  <input class="form-check-input condition-checkbox" type="checkbox" value="<%= condition.id %>" id="cond-<%= condition.id %>" <%= isChecked ? 'checked' : '' %>>
+                                                  <label class="form-check-label" for="cond-<%= condition.id %>"><%= condition.condition_name %></label>
+                                                </div>
+                                              </div>
+                                              <% }) %>
+                                            </div>
+                                          </div>
+                                          <div class="card-footer text-end">
+                                            <button type="submit" class="btn btn-primary" id="save-profile-btn">Simpan Profil</button>
+                                            <div id="profile-save-status" class="ms-3 d-inline"></div>
+                                          </div>
+                                        </form>
+                                      </div>
+                                      <% } %>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </main>
+                  
+                  <!-- Modal EWS -->
+                  <div class="modal fade" id="ewsInfoModal" tabindex="-1" aria-labelledby="ewsInfoModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="ewsInfoModalLabel">Apa itu Early Warning System?</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          <p class="card-text small"><strong>Early Warning Score (EWS)</strong> adalah sistem skor yang digunakan oleh dokter untuk mendeteksi kemerosotan kondisi pasien <b>sebelum</b> menjadi kritis.</p>
+                          <p class="card-text small">Sistem EWS SEHATI menganalisis nilai <i>vital sign</i> (HR & SpO2) dan <b>tren perubahannya</b> selama satu jam terakhir untuk memberikan skor risiko.</p>
+                          <hr>
+                          <h6 class="h6">Interpretasi Skor:</h6>
+                          <ul class="list-group list-group-flush small">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                              <strong>0-3 (Risiko Rendah)</strong>
+                              <span class="badge bg-success rounded-pill">Stabil</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                              <strong>4-6 (Risiko Sedang)</strong>
+                              <span class="badge bg-warning text-dark rounded-pill">Pantau</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                              <strong>7+ (Risiko Tinggi)</strong>
+                              <span class="badge bg-danger rounded-pill">Periksa</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <div class="modal fade" id="ewsInfoModal" tabindex="-1" aria-labelledby="ewsInfoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title" id="ewsInfoModalLabel">Edukasi: Apa Itu Skor Peringatan Dini (EWS)?</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-        <div class="modal-body">
-          <h6>Mengapa EWS Penting?</h6>
-          <p>Seringkali, tubuh memberikan tanda-tanda "peringatan" beberapa jam sebelum kondisi darurat (seperti henti jantung atau gagal napas) terjadi. EWS membantu kita menangkap tanda-tanda ini.</p>
-          <h6>Bagaimana EWS Dihitung?</h6>
-          <p>EWS standar menghitung skor berdasarkan nilai vital sign (Detak Jantung, Saturasi Oksigen, Tekanan Darah, dll.).</p>
-          <h6 class="mt-3">Keunggulan "EWS SEHATI": Analisis Tren</h6>
-          <p>Sistem EWS SEHATI lebih dari sekadar pemantauan biasa. Alih-alih hanya melihat nilai saat ini, sistem kami juga menganalisis <strong>tren data</strong> dari beberapa jam terakhir, karena perubahan data seringkali lebih penting daripada nilainya itu sendiri.</p>
-          <blockquote class="blockquote-footer"><em>Contoh: Detak jantung 85 bpm yang stabil jauh lebih baik daripada detak jantung yang naik dari 60 bpm ke 85 bpm dalam satu jam terakhir.</em></blockquote>
-          <h6 class="mt-3">Apa Arti Skor Ini?</h6>
-          <ul class="list-group">
-            <li class="list-group-item"><strong>0-3 (Risiko Rendah):</strong> Kondisi stabil. Pemantauan rutin dilanjutkan.</li>
-            <li class="list-group-item list-group-item-warning"><strong>4-6 (Risiko Sedang):</strong> Ada perubahan yang perlu diperhatikan. Perawat/keluarga harus meningkatkan pemantauan. Periksa posisi sensor dan kondisi pasien.</li>
-            <li class="list-group-item list-group-item-danger"><strong>7+ (Risiko Tinggi):</strong> Menunjukkan risiko kemerosotan kondisi yang signifikan. <strong>Segera periksa kondisi pasien</strong> dan pertimbangkan untuk menghubungi tenaga medis profesional.</li>
-          </ul>
-        </div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button></div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="modal fade" id="linkUserModal" tabindex="-1" aria-labelledby="linkUserModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title" id="linkUserModalLabel">Mulai Sesi Pasien</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-        <div class="modal-body">
-          <ul class="nav nav-tabs" id="linkUserTab" role="tablist">
-            <li class="nav-item" role="presentation"><button class="nav-link active" id="link-existing-tab" data-bs-toggle="tab" data-bs-target="#link-existing-content" type="button" role="tab">Pilih Pengguna</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" id="link-new-tab" data-bs-toggle="tab" data-bs-target="#link-new-content" type="button" role="tab">Tambah Pengguna Baru</button></li>
-          </ul>
-          <div class="tab-content pt-3" id="linkUserTabContent">
-            <div class="tab-pane fade show active" id="link-existing-content" role="tabpanel">
-              <p>Pilih pengguna dari daftar di bawah ini untuk memulai sesi.</p>
-              <div class="existing-user-list-container" style="max-height: 300px; overflow-y: auto;">
-                <ul class="list-group" id="existing-user-list"><li class="list-group-item">Memuat...</li></ul>
-              </div>
-              <div id="link-existing-status" class="mt-2"></div>
-            </div>
-            <div class="tab-pane fade" id="link-new-content" role="tabpanel">
-              <p>Buat profil pengguna baru dan mulai sesi langsung.</p>
-              <form id="new-user-form">
-                <div class="mb-3"><label for="new-user-name" class="form-label">Nama Lengkap</label><input type="text" class="form-control" id="new-user-name" required></div>
-                <div class="mb-3"><label for="new-user-dob" class="form-label">Tanggal Lahir</label><input type="date" class="form-control" id="new-user-dob" required></div>
-                <div class="mb-3"><label for="new-user-sex" class="form-label">Jenis Kelamin Biologis</label><select id="new-user-sex" class="form-select" required><option value="">Pilih...</option><option value="MALE">Laki-laki</option><option value="FEMALE">Perempuan</option><option value="OTHER">Lainnya</option></select></div>
-                <div id="create-new-user-status" class="mt-2"></div>
-              </form>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <span id="modal-global-status" class="me-auto"></span>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="button" class="btn btn-primary" id="link-existing-user-btn">Mulai Sesi</button>
-          <button type="submit" class="btn btn-success d-none" id="create-and-link-user-btn" form="new-user-form">Buat & Mulai Sesi</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="modal fade" id="warningListModal" tabindex="-1" aria-labelledby="warningListModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title" id="warningListModalLabel">Daftar Kejadian Peringatan</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-        <div class="modal-body">
-          <p class="text-muted small">Menampilkan semua kejadian di mana status tidak "NORMAL" pada periode yang dipilih. Diurutkan dari yang terbaru.</p>
-          <div class="table-responsive">
-            <table class="table table-striped table-hover">
-              <thead class="table-light sticky-top">
-                <tr><th scope="col">Waktu</th><th scope="col">Detak Jantung</th><th scope="col">SpO2</th><th scope="col">Status Peringatan</th></tr>
-              </thead>
-              <tbody id="warning-list-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button></div>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-  
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-  <script src="https://cdn.jsdelivr.net/npm/date-fns"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> <script>
-    // Data ini akan digunakan untuk 'hydrate' halaman jika sesi tidak aktif
-    const initialLogs = <%- JSON.stringify(logs) %>;
-    const deviceInfo = <%- JSON.stringify(device) %>;
-    
-    // Data ini akan NULL jika tidak ada sesi aktif
-    const currentUser = <%- JSON.stringify(user || null) %>; 
-    const allConditions = <%- JSON.stringify(allConditions || []) %>;
-    const userConditions = <%- JSON.stringify(userConditions || []) %>;
-    const isProfileIncomplete = <%= isProfileIncomplete %>;
-  </script>
-  
-  <script src="/js/main.js"></script>
-</body>
-</html>
+                  
+                  <!-- ============ [BARU] MODAL DAFTAR PERINGATAN ============ -->
+                  <div class="modal fade" id="warningListModal" tabindex="-1" aria-labelledby="warningListModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="warningListModalLabel">Daftar Kejadian Peringatan</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          <p class="text-muted small">Menampilkan semua kejadian di mana status tidak "NORMAL" pada periode yang dipilih. Diurutkan dari yang terbaru.</p>
+                          <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                              <thead class="table-light sticky-top">
+                                <tr>
+                                  <th scope="col">Waktu</th>
+                                  <th scope="col">Detak Jantung</th>
+                                  <th scope="col">SpO2</th>
+                                  <th scope="col">Status Peringatan</th>
+                                </tr>
+                              </thead>
+                              <tbody id="warning-list-table-body">
+                                <!-- Data akan diisi oleh main.js -->
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- ============ AKHIR MODAL DAFTAR PERINGATAN ============ -->
+                  
+                  <!-- Modal Tautkan Pengguna -->
+                  <div class="modal fade" id="linkUserModal" ...>
+                    <div class="modal-dialog modal-lg">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="linkUserModalLabel">Tautkan Perangkat ke Pengguna</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          
+                          <ul class="nav nav-tabs" id="linkUserTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                              <button class="nav-link active" id="link-existing-tab" data-bs-toggle="tab" data-bs-target="#link-existing-content" type="button" role="tab">Pilih Pengguna</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                              <button class="nav-link" id="link-new-tab" data-bs-toggle="tab" data-bs-target="#link-new-content" type="button" role="tab">Tambah Pengguna Baru</button>
+                            </li>
+                          </ul>
+                          
+                          <div class="tab-content pt-3" id="linkUserTabContent">
+                            
+                            <div class="tab-pane fade show active" id="link-existing-content" role="tabpanel">
+                              <p>Pilih pengguna dari daftar di bawah ini untuk ditautkan ke perangkat ini.</p>
+                              <div class_id="existing-user-list-container" style="max-height: 300px; overflow-y: auto;">
+                                <ul class="list-group" id="existing-user-list">
+                                  <li class="list-group-item">Memuat...</li>
+                                </ul>
+                              </div>
+                              <div id="link-existing-status" class="mt-2"></div>
+                            </div>
+                            
+                            <div class="tab-pane fade" id="link-new-content" role="tabpanel">
+                              <p>Buat profil pengguna baru dan tautkan langsung ke perangkat ini.</p>
+                              <form id="new-user-form">
+                                <div class="mb-3">
+                                  <label for="new-user-name" class="form-label">Nama Lengkap</label>
+                                  <input type="text" class="form-control" id="new-user-name" required>
+                                </div>
+                                <div class="mb-3">
+                                  <label for="new-user-dob" class="form-label">Tanggal Lahir</label>
+                                  <input type="date" class="form-control" id="new-user-dob" required>
+                                </div>
+                                <div class="mb-3">
+                                  <label for="new-user-sex" class="form-label">Jenis Kelamin Biologis</label>
+                                  <select id="new-user-sex" class="form-select" required>
+                                    <option value="">Pilih...</option>
+                                    <option value="MALE">Laki-laki</option>
+                                    <option value="FEMALE">Perempuan</option>
+                                    <option value="OTHER">Lainnya</option>
+                                  </select>
+                                </div>
+                                <div id="create-new-user-status" class="mt-2"></div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <span id="modal-global-status" class="me-auto"></span>
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                          <button type="button" class="btn btn-primary" id="link-existing-user-btn">Tautkan Pengguna</button>
+                          <button type="submit" class="btn btn-success d-none" id="create-and-link-user-btn" form="new-user-form">Buat & Tautkan</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Bootstrap JS (Dibutuhkan untuk Tab & Modal) -->
+                  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+                  
+                  <!-- Library Lainnya -->
+                  <script src="/socket.io/socket.io.js"></script>
+                  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+                  <script src="https://cdn.jsdelivr.net/npm/date-fns"></script>
+                  
+                  <!-- Variabel EJS untuk Javascript -->
+                  <script>
+                    const initialLogs = <%- JSON.stringify(logs) %>;
+                    const deviceInfo = <%- JSON.stringify(device) %>;
+                    const currentUser = <%- JSON.stringify(user || null) %>; 
+                    const isProfileIncomplete = <%= isProfileIncomplete %>;
+                    const allConditions = <%- JSON.stringify(allConditions || []) %>;
+                    const userConditions = <%- JSON.stringify(userConditions || []) %>;
+                  </script>
+                  
+                  <!-- File JS Utama Anda -->
+                  <script src="/js/main.js"></script>
+                </body>
+                </html>

@@ -1,0 +1,62 @@
+ /* CSS Kustom untuk menyesuaikan UI baru */
+    body {
+      background-color: #f8f9fa; /* Latar belakang abu-abu muda */
+    }
+    .vital-card .card-body {
+      display: flex;
+      align-items: center;
+    }
+    .vital-card .icon {
+      font-size: 2.5rem;
+      width: 60px;
+      text-align: center;
+    }
+    .vital-card .value {
+      font-size: 2.25rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .vital-card .label {
+      font-size: 1rem;
+      color: #6c757d;
+    }
+    .vital-card small {
+      font-size: 0.8rem;
+    }
+
+    /* CSS dari EWS (Gauge & Teks) */
+    .ews-gauge-container {
+      position: relative;
+      max-width: 280px;
+      margin: 1rem auto;
+    }
+    .gauge-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .gauge-text .score {
+      font-size: 3.5rem;
+      font-weight: bold;
+      line-height: 1;
+    }
+    .gauge-text .label {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    
+    /* Helper untuk list profil */
+    .profile-list .list-group-item {
+      border: none;
+      padding: 0.5rem 0;
+      display: flex;
+      align-items: center;
+    }
+    .profile-list .list-group-item i {
+      width: 25px;
+      text-align: center;
+      margin-right: 10px;
+      color: #0d6efd;
+    }

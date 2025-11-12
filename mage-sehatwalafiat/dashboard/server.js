@@ -255,8 +255,8 @@ app.get('/dashboard/:id', async (req, res) => {
     const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [user.id]);
     const userConditions = userCondRows.map(row => row.condition_id);
     
-    const isProfileIncomplete = !user.date_of_birth || !user.height || !user.weight;
-
+    const isProfileIncomplete = !user.date_of_birth || !user.height_cm || !user.weight_kg;
+    
     // 4. Render dashboard dengan SEMUA data
     res.render('dashboard', {
       device: device,
@@ -526,6 +526,7 @@ app.post('/api/devices/link-user', async (req, res) => {
 });
 
 app.post('/api/users/create-and-link', async (req, res) => {
+  console.log(req);
   const { deviceId, fullName, dateOfBirth, biologicalSex } = req.body;
   
   if (!deviceId || !fullName || !dateOfBirth || !biologicalSex) {

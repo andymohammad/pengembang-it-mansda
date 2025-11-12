@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const elCreateAndLinkUserBtn = document.getElementById('create-and-link-user-btn');
   const elNewUserForm = document.getElementById('new-user-form');
   const elPageStatus = document.getElementById('page-status');
-
+  
   // Listener untuk Tab
   elLinkExistingTab.addEventListener('click', () => {
     elLinkExistingUserBtn.classList.remove('d-none');
@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elLinkExistingUserBtn.classList.add('d-none');
     elCreateAndLinkUserBtn.classList.remove('d-none');
   });
-
+  
   // Listener untuk memilih user dari daftar
   elExistingUserList.querySelectorAll('li').forEach(li => {
     li.addEventListener('click', () => {
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedUserId = li.dataset.userId;
     });
   });
-
+  
   // Listener Tombol "Mulai Sesi"
   elLinkExistingUserBtn.addEventListener('click', async () => {
     if (!selectedUserId) {
@@ -40,38 +40,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     await startSession(selectedUserId);
   });
-
-  // Listener Form "Buat & Mulai Sesi"
-  elNewUserForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    elCreateAndLinkUserBtn.disabled = true;
-    elPageStatus.textContent = 'Membuat pengguna baru...';
-
-    const formData = {
-      full_name: document.getElementById('new-user-name').value,
-      date_of_birth: document.getElementById('new-user-dob').value,
-      sex: document.getElementById('new-user-sex').value
-    };
-
-    try {
-      // 1. Buat pengguna baru
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const newUser = await response.json();
-      if (!response.ok) throw new Error(newUser.error || 'Gagal membuat pengguna');
-
-      // 2. Mulai sesi dengan pengguna baru
-      await startSession(newUser.id);
-
-    } catch (err) {
-      elPageStatus.textContent = err.message;
-      elCreateAndLinkUserBtn.disabled = false;
-    }
-  });
-
+  
+  if (elNewUserForm) {
+    elNewUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      elCreateAndLinkUserBtn.disabled = true;
+      elPageStatus.textContent = 'Membuat pengguna baru...';
+      
+      // [REVISI 1] Ubah nama key agar sesuai dengan backend
+      // dan tambahkan 'deviceId'
+      const formData = {
+        deviceId: deviceId, // <-- PENTING: Ambil dari 'deviceId' global di file ini
+        fullName: document.getElementById('new-user-name').value,
+        dateOfBirth: document.getElementById('new-user-dob').value,
+        biologicalSex: document.getElementById('new-user-sex').value // <-- 'biologicalSex'
+      };
+      
+      try {
+        // 1. Panggil API baru Anda
+        const response = await fetch('/api/users/create-and-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData) // Kirim data yang sudah benar
+        });
+        
+        const result = await response.json();
+        if (!response.ok) {
+          // Tampilkan error dari server (misal: "Semua field diperlukan")
+          throw new Error(result.error || 'Gagal membuat pengguna');
+        }
+        
+        // [REVISI 2] Hapus 'startSession'. Langsung redirect.
+        // API Anda sudah berhasil menautkan user.
+        console.log(result.message); // "Pengguna baru berhasil dibuat..."
+        
+        // Langsung arahkan ke dashboard
+        window.location.href = `/dashboard/${deviceId}`;
+        
+      } catch (err) {
+        elPageStatus.textContent = err.message;
+        elCreateAndLinkUserBtn.disabled = false;
+      }
+    });
+  }
+  
   // Fungsi helper untuk memanggil API
   async function startSession(userId) {
     elPageStatus.textContent = 'Memulai sesi...';
