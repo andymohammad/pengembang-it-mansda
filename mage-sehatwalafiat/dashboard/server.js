@@ -1,4 +1,5 @@
 require('dotenv').config();
+const axios = require('axios');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -155,21 +156,21 @@ app.get('/', async (req, res) => {
   }
 });
 // app.get('/dashboard', async (req, res) => {
-//   // 1. Ambil device_id dari query URL
+  //   // 1. Ambil device_id dari query URL
 //   const { device_id } = req.query;
-  
+
 //   // 2. Jika tidak ada ID, paksa kembali ke halaman pemilihan
 //   if (!device_id) {
 //     return res.redirect('/');
 //   }
-  
+
 //   let logs = [];
 //   let device = null;
 //   let user = null;
 //   let allConditions = [];
 //   let userConditions = [];
 //   let isProfileIncomplete = true; 
-  
+
 //   try {
 //     const [deviceRows] = await db.query("SELECT * FROM devices WHERE id = ?", [device_id]);
 //     if (deviceRows.length === 0) {
@@ -182,13 +183,13 @@ app.get('/', async (req, res) => {
 //       const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [device.user_id]);
 //       if (userRows.length > 0) {
 //         user = userRows[0];
-        
+
 //         // 5. Cek kelengkapan profil
 //         // (Kita anggap profil lengkap jika Tgl Lahir DAN Tinggi/Berat diisi)
 //         if (user.date_of_birth && user.height_cm && user.weight_kg) {
 //           isProfileIncomplete = false;
 //         }
-        
+
 //         // 6. Ambil kondisi yang sudah dimiliki pengguna
 //         const [userCondRows] = await db.query("SELECT condition_id FROM user_conditions WHERE user_id = ?", [user.id]);
 //         userConditions = userCondRows.map(row => row.condition_id);
@@ -205,7 +206,7 @@ app.get('/', async (req, res) => {
 //     `;
 //     const [logRows] = await db.query(logQuery, [device_id]);
 //     logs = logRows.reverse();
-    
+
 //   } catch (err) {
 //     console.error("Database query error in GET /dashboard:", err.message);
 //     // Tetap render halaman meski log gagal, tapi kirim log kosong
@@ -230,7 +231,7 @@ app.get('/dashboard/:id', async (req, res) => {
       return res.status(404).send('Perangkat tidak ditemukan');
     }
     const device = deviceRows[0];
-
+    
     // [CEK PENTING]
     // Jika tidak ada user_id (misal: user akses URL langsung), paksa kembali!
     if (!device.user_id) {
@@ -245,7 +246,7 @@ app.get('/dashboard/:id', async (req, res) => {
       return res.redirect(`/link-device/${deviceId}`);
     }
     const user = userRows[0];
-
+    
     // 3. Ambil data pendukung (logs, conditions, dll.)
     const [logs] = await db.query(
       "SELECT * FROM sensor_logs WHERE device_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 100", 
@@ -697,7 +698,13 @@ function calculateEwsScore(logs) {
 async function runEwsCalculationForAllDevices() {
   console.log('[EWS Job] Menjalankan kalkulasi EWS periodik...');
   try {
-    const [devices] = await db.query("SELECT id FROM devices WHERE status = 'online'");
+    const queryDevice = `
+      SELECT d.id, d.device_name, u.full_name, u.phone_number 
+      FROM devices d
+      LEFT JOIN users u ON d.user_id = u.id
+      WHERE d.status = 'online'
+    `;
+    const [devices] = await db.query(queryDevice);
     if (devices.length === 0) {
       console.log('[EWS Job] Tidak ada perangkat online. Kalkulasi dihentikan.');
       return; // Menghentikan eksekusi fungsi jika tidak ada perangkat yang online
@@ -726,6 +733,35 @@ async function runEwsCalculationForAllDevices() {
       });
       
       console.log(`[EWS Job] Perangkat ${device.id} - Skor EWS baru: ${newEwsScore}`);
+      if (device.phone_number && newEwsScore >= 4) {
+        
+        let riskLevel = "RISIKO SEDANG";
+        let advice = "Tingkatkan frekuensi pemantauan.";
+        
+        if (newEwsScore >= 7) {
+          riskLevel = "⚠️ BAHAYA / RISIKO TINGGI";
+          advice = "SEGERA HUBUNGI DOKTER ATAU TENAGA MEDIS!";
+        }
+        
+        const waMessage = 
+`*PERINGATAN DINI (EWS)*
+---------------------------
+Nama Pasien: *${device.full_name || 'Tanpa Nama'}*
+Perangkat: ${device.device_name}
+Waktu: ${dayjs().tz("Asia/Jakarta").format("DD/MM/YYYY HH:mm")}
+        
+*Skor EWS Saat Ini: ${newEwsScore}*
+Status: *${riskLevel}*
+        
+Saran:
+        ${advice}
+---------------------------
+_Pesan otomatis dari Sistem SEHATI Monitoring_`;
+        
+        // Panggil fungsi helper
+        await sendWhatsAppNotification(device.phone_number, waMessage);
+      }
+      
     }
   } catch (error) {
     console.error('[EWS Job] Gagal menjalankan kalkulasi EWS:', error.message);
@@ -806,6 +842,38 @@ async function updateDeviceStatus(deviceId, status) {
     await db.query(query, [status, deviceId]);
   } catch (error) {
     console.error("Error updating device status:", error.message);
+  }
+}
+
+async function sendWhatsAppNotification(targetNumber, message) {
+  // Cek konfigurasi
+  const waUrl = process.env.WA_GATEWAY_URL;
+  const waKey = process.env.WA_API_KEY;
+  const waClient = process.env.WA_CLIENT_ID;
+  
+  if (!waUrl || !waKey || !waClient || !targetNumber) {
+    console.warn('[WA] Konfigurasi WA atau Nomor Tujuan tidak lengkap. Pesan tidak dikirim.');
+    return;
+  }
+  
+  try {
+    const endpoint = `${waUrl}/api/send-message/${waClient}`;
+    const payload = {
+      number: targetNumber,
+      message: message
+    };
+    
+    const config = {
+      headers: {
+        'x-api-key': waKey,
+        'Content-Type': 'application/json'
+      }
+    };
+    
+    await axios.post(endpoint, payload, config);
+    console.log(`[WA SUCCESS] Notifikasi dikirim ke ${targetNumber}`);
+  } catch (error) {
+    console.error(`[WA FAILED] Gagal mengirim ke ${targetNumber}:`, error.message);
   }
 }
 

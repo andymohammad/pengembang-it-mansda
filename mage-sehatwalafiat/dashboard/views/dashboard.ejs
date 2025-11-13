@@ -78,22 +78,54 @@
 
 <body data-device-id="<%= device.id %>" data-user-id="<%= user.id %>"">
   
-  <header class="d-flex justify-content-between align-items-center p-3 px-4 bg-white shadow-sm sticky-top">
-    <h4 class="h4 mb-0 fw-bold">
-      <i class="fa-solid fa-heart-pulse text-primary"></i>
-      SEHATI Monitoring
-    </h4>
-    <% 
-    const statusClass = device.status === 'online' ? 'bg-success' : 'bg-danger';
-    const iconClass = device.status === 'online' ? 'fa-circle-check' : 'fa-circle-xmark';
-    
-    %>
-    
-    <div class="badge fs-6 <%= statusClass %>" id="device-status-badge">
-      <i id="device-status-icon" class="fa-solid <%= iconClass %> me-2"></i>
-      <span id="device-status-name"><%= device.device_name %></span>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top px-3">
+    <div class="container-fluid">
+      
+      <a class="navbar-brand fw-bold" href="#">
+        <i class="fa-solid fa-heart-pulse text-primary"></i> SEHATI
+      </a>
+      
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      
+      <div class="collapse navbar-collapse" id="navbarContent">
+        
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          
+          <li class="nav-item">
+            <a class="nav-link" href="/">
+              <i class="fa-solid fa-arrow-left me-1"></i> Daftar Perangkat
+            </a>
+          </li>
+          
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#waSettingsModal">
+              <i class="fa-brands fa-whatsapp me-1 text-success"></i> Notifikasi WA
+            </a>
+          </li>
+          
+          <li class="nav-item">
+            <a class="nav-link" href="#" id="btn-recap-medis">
+              <i class="fa-solid fa-file-medical me-1 text-danger"></i> Rekap Medis
+            </a>
+          </li>
+        </ul>
+        
+        <div class="d-flex align-items-center mt-2 mt-lg-0">
+          <% 
+          const statusClass = device.status === 'online' ? 'bg-success' : 'bg-danger';
+          const iconClass = device.status === 'online' ? 'fa-circle-check' : 'fa-circle-xmark';
+          %>
+          <div class="badge fs-6 <%= statusClass %>" id="device-status-badge">
+            <i id="device-status-icon" class="fa-solid <%= iconClass %> me-2"></i>
+            <span id="device-status-name"><%= device.device_name %></span>
+          </div>
+        </div>
+        
+      </div>
     </div>
-  </header>
+  </nav>
   
   <main class="container-fluid px-4 mt-4">
     <div class="row g-4 mb-4">
@@ -618,6 +650,43 @@
                           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                           <button type="button" class="btn btn-primary" id="link-existing-user-btn">Tautkan Pengguna</button>
                           <button type="submit" class="btn btn-success d-none" id="create-and-link-user-btn" form="new-user-form">Buat & Tautkan</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="modal fade" id="waSettingsModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title"><i class="fa-brands fa-whatsapp text-success me-2"></i>Pengaturan Notifikasi WA</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          <form id="wa-settings-form">
+                            <div class="mb-3">
+                              <label for="wa-target-phone" class="form-label">Nomor WhatsApp Penerima</label>
+                              <input type="text" class="form-control" id="wa-target-phone" placeholder="Contoh: 628123456789" value="<%= user.phone_number || '' %>">
+                              <div class="form-text">Gunakan format internasional (62...) tanpa tanda plus (+).</div>
+                            </div>
+                            
+                            <div class="mb-3 form-check form-switch">
+                              <input class="form-check-input" type="checkbox" id="wa-enable-alert" checked>
+                              <label class="form-check-label" for="wa-enable-alert">Aktifkan Notifikasi Peringatan (EWS Tinggi)</label>
+                            </div>
+                            
+                            <hr>
+                            <p class="small text-muted mb-2">Jenis notifikasi yang dikirim:</p>
+                            <ul class="small text-muted">
+                              <li>Kondisi Kritis (EWS >= 7)</li>
+                              <li>Detak Jantung Ekstrem (>130 atau <40)</li>
+                              <li>SpO2 Rendah (<90%)</li>
+                            </ul>
+                          </form>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                          <button type="button" class="btn btn-success" id="save-wa-settings-btn">Simpan Pengaturan</button>
                         </div>
                       </div>
                     </div>

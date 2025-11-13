@@ -96,6 +96,9 @@ const ctxEws = document.getElementById('ewsHistoryChart').getContext('2d');
 const ctxEwsGauge = document.getElementById('ewsGaugeChart').getContext('2d');
 const MAX_EWS_SCORE = 12;
 
+const btnRecapMedis = document.getElementById('btn-recap-medis');
+const btnSaveWa = document.getElementById('save-wa-settings-btn');
+
 const formatDataForChart = (logs) => {
   const labels = logs.map(log => new Date(log.timestamp));
   // Pisahkan data per perangkat (jika Anda mau, tapi untuk simpelnya kita gabung dulu)
@@ -435,7 +438,7 @@ function updateVitalCards(data) {
   if(elStatusTimestamp) elStatusTimestamp.textContent = time;
   if(elHrvTimestamp) elHrvTimestamp.textContent = time;
   if(elSqiTimestamp) elSqiTimestamp.textContent = time;
-
+  
   elCurrentHr.parentElement.classList.add('bg-light');
   setTimeout(() => elCurrentHr.parentElement.classList.remove('bg-light'), 300);
 }
@@ -1024,5 +1027,82 @@ if (elWarningListModal) {
       `;
       elWarningListTableBody.appendChild(tr);
     });
+  });
+}
+
+if (btnRecapMedis) {
+  btnRecapMedis.addEventListener('click', async (e) => {
+    e.preventDefault();
+    
+    // Contoh: Fungsi Print Halaman atau Redirect ke PDF
+    // Opsi A: Print Halaman Sederhana
+    // window.print(); 
+    
+    // Opsi B (Lebih baik): SweetAlert Konfirmasi lalu Download
+    const result = await Swal.fire({
+      title: 'Unduh Rekap Medis?',
+      text: "Laporan riwayat vital sign dan EWS akan diunduh.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Unduh PDF',
+      cancelButtonText: 'Batal'
+    });
+    
+    if (result.isConfirmed) {
+      // Rencana call rekap pdf
+      // window.location.href = `/api/report/pdf/${deviceId}`;
+      
+      // Simulasi sukses untuk sekarang
+      Swal.fire('Berhasil!', 'Laporan sedang disiapkan...', 'success');
+    }
+  });
+}
+
+if (btnSaveWa) {
+  btnSaveWa.addEventListener('click', async () => {
+    const phone = document.getElementById('wa-target-phone').value;
+    const isEnabled = document.getElementById('wa-enable-alert').checked;
+    
+    // Validasi sederhana
+    if (phone && !phone.startsWith('62')) {
+      alert('Nomor harus diawali dengan 62');
+      return;
+    }
+    
+    btnSaveWa.disabled = true;
+    btnSaveWa.textContent = 'Menyimpan...';
+    
+    try {
+      // Panggil API Backend (Anda perlu membuat endpoint ini di server.js nanti)
+      // Untuk sementara kita simpan di localStorage atau tampilkan sukses
+      /* const response = await fetch('/api/user/settings/wa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: rawActiveUserId, phone, enabled: isEnabled })
+      });
+      */
+      
+      // Simulasi Sukses
+      await new Promise(r => setTimeout(r, 800)); 
+      
+      // Tutup Modal
+      const modalEl = document.getElementById('waSettingsModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      modal.hide();
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Tersimpan',
+        text: 'Pengaturan notifikasi WhatsApp berhasil diperbarui.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+    } catch (error) {
+      alert('Gagal menyimpan pengaturan.');
+    } finally {
+      btnSaveWa.disabled = false;
+      btnSaveWa.textContent = 'Simpan Pengaturan';
+    }
   });
 }
