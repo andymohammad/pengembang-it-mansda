@@ -403,10 +403,10 @@ function updateStatisticsUI(stats, logs) {
   
   if (logs && logs.length > 0) {
     // console.log(logs);
-    const startTime = new Date(logs[0].timestamp).toLocaleString('id-ID', {
+    const startTime = new Date(logs[0].TIMESTAMP).toLocaleString('id-ID', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-    const endTime = new Date(logs[logs.length - 1].timestamp).toLocaleString('id-ID', {
+    const endTime = new Date(logs[logs.length - 1].TIMESTAMP).toLocaleString('id-ID', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
     elStatPeriodText.textContent = `Periode: ${startTime} - ${endTime}`;
@@ -435,6 +435,9 @@ function updateVitalCards(data) {
   if(elStatusTimestamp) elStatusTimestamp.textContent = time;
   if(elHrvTimestamp) elHrvTimestamp.textContent = time;
   if(elSqiTimestamp) elSqiTimestamp.textContent = time;
+
+  elCurrentHr.parentElement.classList.add('bg-light');
+  setTimeout(() => elCurrentHr.parentElement.classList.remove('bg-light'), 300);
 }
 
 function addDataToChart(data) {
@@ -526,7 +529,8 @@ function loadProfileData(user, userCons, allCons) {
 socket.on('update-data', (data) => {
   console.log('Received real-time data:', data);
   // Hanya perbarui jika tidak ada sesi aktif ATAU jika data_user_id cocok dengan sesi aktif
-  if (activeUserId === null || data.user_id !== activeUserId) {
+  // if (activeUserId === null || data.user_id !== activeUserId) {
+  if (activeUserId === null) {
     // Ini data "tanpa pemilik", mungkin hanya tampilkan di log
     console.warn("Menerima data untuk sesi yang tidak aktif/berbeda:", data);
     return;
@@ -1001,15 +1005,16 @@ if (elWarningListModal) {
     
     // Urutkan dari yang terbaru (array sudah di-push, jadi kita reverse)
     // Sebenarnya, 'currentWarningLogs' sudah urut menaik, kita urutkan menurun
-    const sortedLogs = [...currentWarningLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const sortedLogs = [...currentWarningLogs].sort((a, b) => new Date(b.TIMESTAMP) - new Date(a.TIMESTAMP));
     
     // Isi tabel
     sortedLogs.forEach(log => {
       const tr = document.createElement('tr');
-      const timestamp = new Date(log.timestamp).toLocaleString('id-ID', {
+      const timestamp = new Date(log.TIMESTAMP).toLocaleString('id-ID', {
         day: '2-digit', month: '2-digit', year: 'numeric', 
         hour: '2-digit', minute: '2-digit', second: '2-digit'
       });
+      
       
       tr.innerHTML = `
         <td>${timestamp}</td>
