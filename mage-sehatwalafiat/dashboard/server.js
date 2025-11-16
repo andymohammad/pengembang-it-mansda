@@ -10,10 +10,13 @@ const cron = require('node-cron');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
+const { reverse } = require('dns');
+const { getRecommendations } = require('./recommendationEngine.js');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 const app = express();
+app.locals.appVersion = new Date().getTime();
 const server = http.createServer(app);
 const io = new Server(server);
 // Middleware
@@ -414,7 +417,7 @@ app.get('/api/devices', async (req, res) => {
 
 app.get('/api/logs', async (req, res) => {
   // 1. Ambil query parameter 'start' dan 'end' dari URL
-  const { start, end, device_id } = req.query;
+  const { start, end, device_id, user_id } = req.query;
   
   // 2. Validasi input
   if (!start || !end || !device_id) {
@@ -427,11 +430,12 @@ app.get('/api/logs', async (req, res) => {
       SELECT s.id, s.device_id, s.heart_rate, s.spo2, s.status, s.hrv, s.sqi, s.timestamp, d.device_name 
       FROM sensor_logs s
       LEFT JOIN devices d ON s.device_id = d.id
-      WHERE s.timestamp BETWEEN ? AND ? AND s.device_id = ?
+      LEFT JOIN users u ON d.user_id = u.id
+      WHERE s.timestamp BETWEEN ? AND ? AND s.device_id = ? AND s.user_id = ?
       ORDER BY s.timestamp ASC 
     `;
     
-    const [rows] = await db.query(query, [start, end, device_id]);
+    const [rows] = await db.query(query, [start, end, device_id, user_id]);
     res.json(rows);
     
   } catch (err) {
@@ -479,20 +483,19 @@ app.get('/api/generate-dummy', async (req, res) => {
 });
 
 app.get('/api/ews-history', async (req, res) => {
-  const { start, end, device_id } = req.query;
-  
-  if (!start || !end || !device_id) {
-    return res.status(400).json({ error: 'Parameter "start", "end", dan "device_id" diperlukan' });
+  const { start, end, device_id, user_id } = req.query;
+  if (!start || !end || !device_id || !user_id) {
+    return res.status(400).json({ error: 'Parameter "start", "end", "device_id", dan "user_id" diperlukan' });
   }
   
   try {
     const query = `
       SELECT ews_score, timestamp 
       FROM ews_logs
-      WHERE device_id = ? AND timestamp BETWEEN ? AND ?
+      WHERE device_id = ? AND user_id = ? AND timestamp BETWEEN ? AND ?
       ORDER BY timestamp ASC 
     `;
-    const [rows] = await db.query(query, [device_id, start, end]);
+    const [rows] = await db.query(query, [device_id, user_id, start, end]);
     res.json(rows);
     
   } catch (err) {
@@ -658,6 +661,58 @@ app.get('/api/session/status', async (req, res) => {
   }
 });
 
+app.post('/api/recommendations', async (req, res) => {
+  try {
+    const { userId, deviceId, activity } = req.body;
+    
+    if (!userId || !deviceId || !activity) {
+      return res.status(400).json({ error: 'Data tidak lengkap.' });
+    }
+    
+    // 1. Ambil data profil (Umur, Riwayat)
+    const [userRows] = await db.query("SELECT * FROM users WHERE id = ?", [userId]);
+    const [condRows] = await db.query("SELECT c.condition_name FROM user_conditions uc JOIN conditions c ON uc.condition_id = c.id WHERE uc.user_id = ?", [userId]);
+    
+    if (userRows.length === 0) {
+      return res.status(404).json({ error: 'User tidak ditemukan' });
+    }
+    
+    const user = userRows[0];
+    const userAge = new Date().getFullYear() - new Date(user.date_of_birth).getFullYear();
+    const userConditions = condRows.map(c => c.condition_name.toLowerCase()); // misal: ['hipertensi', 'diabetes']
+    
+    // 2. Ambil data vital TERBARU
+    const [logRows] = await db.query(
+      "SELECT heart_rate, spo2 FROM sensor_logs WHERE device_id = ? AND user_id = ? ORDER BY timestamp DESC LIMIT 1",
+      [deviceId, userId]
+    );
+    
+    if (logRows.length === 0) {
+      return res.status(404).json({ error: 'Belum ada data vital.' });
+    }
+    
+    const vitals = {
+      detak_jantung: logRows[0].heart_rate,
+      kadar_oksigen: logRows[0].spo2
+    };
+    
+    const profile = {
+      umur: userAge,
+      riwayat_penyakit: userConditions
+    };
+    
+    // 3. Panggil "Otak"
+    const recommendations = getRecommendations(vitals, profile, activity);
+    
+    // 4. Kirim kembali hasilnya
+    res.json({ recommendations });
+    
+  } catch (error) {
+    console.error("Error di /api/recommendations:", error.message);
+    res.status(500).send('Server error');
+  }
+});
+
 /**
 * Menghitung skor EWS berdasarkan satu set data log.
 * Ini adalah 'otak' dari EWS SEHATI.
@@ -698,42 +753,76 @@ function calculateEwsScore(logs) {
 async function runEwsCalculationForAllDevices() {
   console.log('[EWS Job] Menjalankan kalkulasi EWS periodik...');
   try {
-    const queryDevice = `
-      SELECT d.id, d.device_name, u.full_name, u.phone_number 
-      FROM devices d
-      LEFT JOIN users u ON d.user_id = u.id
-      WHERE d.status = 'online'
-    `;
-    const [devices] = await db.query(queryDevice);
+    const [devices] = await db.query(
+      "SELECT id, user_id FROM devices WHERE status = 'online' AND user_id IS NOT NULL"
+    );
     if (devices.length === 0) {
       console.log('[EWS Job] Tidak ada perangkat online. Kalkulasi dihentikan.');
       return; // Menghentikan eksekusi fungsi jika tidak ada perangkat yang online
     }
     for (const device of devices) {
       const [logs] = await db.query(
-        "SELECT * FROM sensor_logs WHERE device_id = ? AND timestamp >= NOW() - INTERVAL 1 HOUR ORDER BY timestamp ASC",
-        [device.id]
+        "SELECT * FROM sensor_logs WHERE device_id = ? AND user_id = ? AND timestamp >= NOW() - INTERVAL 1 HOUR ORDER BY timestamp ASC",
+        [device.id, device.user_id] // <- Filter berdasarkan device dan userid
+      );
+      // Ambil profil user (untuk No. HP & Nama)
+      const [userRows] = await db.query(
+        "SELECT full_name, phone_number FROM users WHERE id = ?",
+        [device.user_id]
       );
       
+      if (logs.length === 0 || userRows.length === 0) {
+        console.log(`[JOB] Melewatkan Perangkat ${device.id} (User ${device.user_id}), tidak ada log / data user.`);
+        continue; // Lanjut ke device berikutnya
+      }
+      const user = userRows[0];
+      const latestLog = logs[logs.length - 1];
       // 2. Hitung skor EWS
       const newEwsScore = calculateEwsScore(logs);
       console.log("EWS Score: ", newEwsScore);
       // 3. Simpan skor baru ke tabel riwayat (ews_logs)
-      await db.query("INSERT INTO ews_logs (device_id, ews_score) VALUES (?, ?)", [device.id, newEwsScore]);
-      
+      await db.query(
+        "INSERT INTO ews_logs (device_id, user_id, ews_score) VALUES (?, ?, ?)", 
+        [device.id, device.user_id, newEwsScore]
+      );
       // 4. Perbarui skor EWS terbaru di tabel 'devices'
       await db.query("UPDATE devices SET ews_score = ? WHERE id = ?", [newEwsScore, device.id]);
-      
       // 5. Siarkan skor baru ke dashboard yang relevan
       const deviceRoom = `device_${device.id}`;
       io.to(deviceRoom).emit('update-ews', {
         device_id: device.id,
+        user_id: device.user_id, // Kirim juga user_id
         ews_score: newEwsScore,
         timestamp: new Date().toISOString()
       });
       
       console.log(`[EWS Job] Perangkat ${device.id} - Skor EWS baru: ${newEwsScore}`);
-      if (device.phone_number && newEwsScore >= 4) {
+      
+      const vitals = {
+        hr: latestLog.heart_rate,
+        spo2: latestLog.spo2
+      };
+      let criticalAlertMessage = null;
+      if (vitals.spo2 < 90) {
+        criticalAlertMessage = `[KRITIS] Oksigen pasien ${user.full_name} (Perangkat ${device.id}) jatuh ke ${vitals.spo2}%! Segera periksa.`;
+      } else if (vitals.hr > 140) {
+        criticalAlertMessage = `[KRITIS] Detak jantung pasien ${user.full_name} (Perangkat ${device.id}) sangat tinggi: ${vitals.hr} bpm! Segera periksa.`;
+      } else if (vitals.hr < 40) {
+        criticalAlertMessage = `[KRITIS] Detak jantung pasien ${user.full_name} (Perangkat ${device.id}) sangat rendah: ${vitals.hr} bpm! Segera periksa.`;
+      }
+      
+      if (criticalAlertMessage) {
+        console.warn(criticalAlertMessage); // Log ke server
+        
+        // Panggil fungsi Notifikasi WA (jika nomor HP ada)
+        if (user.phone_number) {
+          await sendWhatsAppNotification(user.phone_number, waMessage);
+          console.log(`[JOB] Memicu Notifikasi WA ke ${user.phone_number}`);
+        } else {
+          console.log(`[JOB] Alert kritis terdeteksi, tetapi user ${user.full_name} tidak memiliki nomor HP.`);
+        }
+      }
+      if (user.phone_number && newEwsScore >= 4) {
         
         let riskLevel = "RISIKO SEDANG";
         let advice = "Tingkatkan frekuensi pemantauan.";

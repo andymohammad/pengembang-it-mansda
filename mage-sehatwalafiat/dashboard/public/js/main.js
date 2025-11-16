@@ -99,6 +99,12 @@ const MAX_EWS_SCORE = 12;
 const btnRecapMedis = document.getElementById('btn-recap-medis');
 const btnSaveWa = document.getElementById('save-wa-settings-btn');
 
+// Fitur Rekomendasi
+const btnGetRec = document.getElementById('get-recommendation-btn');
+const recList = document.getElementById('recommendation-list');
+const recLoading = document.getElementById('recommendation-loading');
+const activitySelect = document.getElementById('current-activity');
+
 const formatDataForChart = (logs) => {
   const labels = logs.map(log => new Date(log.timestamp));
   // Pisahkan data per perangkat (jika Anda mau, tapi untuk simpelnya kita gabung dulu)
@@ -118,13 +124,13 @@ sensorChart = new Chart(ctx, {
     datasets: [
       {
         label: 'Detak Jantung (bpm)',
-        data: initialData.hrData,
+        data: [],
         borderColor: 'rgba(255, 99, 132, 1)',
         yAxisID: 'yHr',
       },
       {
         label: 'SpO2 (%)',
-        data: initialData.spo2Data,
+        data: [],
         borderColor: 'rgba(54, 162, 235, 1)',
         yAxisID: 'ySpo2',
       }
@@ -276,6 +282,8 @@ function updateEwsGauge(score) {
 * Fungsi untuk memperbarui data di dalam grafik.
 */
 function updateChart(logs) {
+  console.log("function update chart");
+  console.log(logs);
   const newData = formatDataForChart(logs);
   sensorChart.data.datasets[0].data = newData.hrData;
   sensorChart.data.datasets[1].data = newData.spo2Data;
@@ -306,7 +314,8 @@ function addDataToChart(data) {
 // [BARU] Fungsi untuk mengambil & memperbarui grafik EWS
 async function fetchAndUpdateEwsChart(start, end) {
   try {
-    const response = await fetch(`/api/ews-history?start=${start}&end=${end}&device_id=${deviceId}`);
+    // const response = await fetch(`/api/ews-history?start=${start}&end=${end}&device_id=${deviceId}`);
+    const response = await fetch(`/api/ews-history?start=${start}&end=${end}&device_id=${deviceId}&user_id=${activeUserId}`);
     if (!response.ok) throw new Error('Gagal mengambil riwayat EWS');
     
     const ewsLogs = await response.json();
@@ -406,10 +415,10 @@ function updateStatisticsUI(stats, logs) {
   
   if (logs && logs.length > 0) {
     // console.log(logs);
-    const startTime = new Date(logs[0].TIMESTAMP).toLocaleString('id-ID', {
+    const startTime = new Date(logs[0].timestamp).toLocaleString('id-ID', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-    const endTime = new Date(logs[logs.length - 1].TIMESTAMP).toLocaleString('id-ID', {
+    const endTime = new Date(logs[logs.length - 1].timestamp).toLocaleString('id-ID', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
     elStatPeriodText.textContent = `Periode: ${startTime} - ${endTime}`;
@@ -627,7 +636,7 @@ elFilterButton.addEventListener('click', async () => {
   const end = elFilterEnd.value;
   
   if (!start || !end) {
-    alert('Silakan pilih waktu mulai dan selesai.');
+    swal.fire('Filter Data','Silakan pilih waktu mulai dan selesai.','warning');
     return;
   }
   
@@ -635,7 +644,7 @@ elFilterButton.addEventListener('click', async () => {
   const endTime = end.replace('T', ' ');
   
   try {
-    const response = await fetch(`/api/logs?start=${startTime}&end=${endTime}&device_id=${deviceId}`);
+    const response = await fetch(`/api/logs?start=${startTime}&end=${endTime}&device_id=${deviceId}&user_id=${activeUserId}`);
     
     if (!response.ok) {
       throw new Error('Gagal mengambil data dari server');
@@ -648,7 +657,6 @@ elFilterButton.addEventListener('click', async () => {
     updateStatisticsUI(stats, filteredLogs);
     
     isFiltered = true;
-    elChartTitle.textContent = `Riwayat Data (Difilter)`;
     
   } catch (error) {
     console.error('Error filtering data:', error);
@@ -809,9 +817,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   if (typeof initialLogs !== 'undefined') {
+    
     const stats = calculateStatistics(initialLogs);
     updateStatisticsUI(stats, initialLogs);
-    updateChart(initialLogs);
+    
   }
   
   if (typeof currentUser !== 'undefined') {
@@ -820,6 +829,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadProfileData(currentUser, userConditions, allConditions);
     }
   }
+  
+  updateChart(safeInitialLogs);
 });
 
 async function loadExistingUsers() {
@@ -1008,12 +1019,12 @@ if (elWarningListModal) {
     
     // Urutkan dari yang terbaru (array sudah di-push, jadi kita reverse)
     // Sebenarnya, 'currentWarningLogs' sudah urut menaik, kita urutkan menurun
-    const sortedLogs = [...currentWarningLogs].sort((a, b) => new Date(b.TIMESTAMP) - new Date(a.TIMESTAMP));
+    const sortedLogs = [...currentWarningLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     // Isi tabel
     sortedLogs.forEach(log => {
       const tr = document.createElement('tr');
-      const timestamp = new Date(log.TIMESTAMP).toLocaleString('id-ID', {
+      const timestamp = new Date(log.timestamp).toLocaleString('id-ID', {
         day: '2-digit', month: '2-digit', year: 'numeric', 
         hour: '2-digit', minute: '2-digit', second: '2-digit'
       });
@@ -1103,6 +1114,60 @@ if (btnSaveWa) {
     } finally {
       btnSaveWa.disabled = false;
       btnSaveWa.textContent = 'Simpan Pengaturan';
+    }
+  });
+}
+if (btnGetRec) {
+  btnGetRec.addEventListener('click', async () => {
+    
+    recLoading.classList.remove('d-none'); // Tampilkan spinner
+    recList.innerHTML = ''; // Kosongkan daftar lama
+    btnGetRec.disabled = true;
+    
+    try {
+      const selectedActivity = activitySelect.value;
+      
+      const response = await fetch('/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: activeUserId, // 'rawActiveUserId' dari global scope main.js
+          deviceId: deviceId, // 'deviceId' dari global scope main.js
+          activity: selectedActivity
+        })
+      });
+      
+      const data = await response.json();
+      console.log(data);
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal mengambil analisis');
+      }
+      
+      // Tampilkan hasil
+      if (data.recommendations && data.recommendations.length > 0) {
+        data.recommendations.forEach(text => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
+          
+          // Beri ikon berdasarkan kata kunci
+          if (text.includes('KRITIS') || text.includes('jantung')) {
+            li.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-danger me-2"></i> ${text}`;
+          } else if (text.includes('menurun') || text.includes('tinggi')) {
+            li.innerHTML = `<i class="fa-solid fa-circle-info text-warning me-2"></i> ${text}`;
+          } else {
+            li.innerHTML = `<i class="fa-solid fa-circle-check text-success me-2"></i> ${text}`;
+          }
+          recList.appendChild(li);
+        });
+      } else {
+        recList.innerHTML = '<li class="list-group-item text-muted small text-center">Tidak ada rekomendasi spesifik saat ini.</li>';
+      }
+      
+    } catch (error) {
+      recList.innerHTML = `<li class="list-group-item list-group-item-danger">${error.message}</li>`;
+    } finally {
+      recLoading.classList.add('d-none'); // Sembunyikan spinner
+      btnGetRec.disabled = false;
     }
   });
 }
